@@ -32,6 +32,8 @@ add_library(engine STATIC
     src/engine/search.cpp
     src/engine/tt.h
     src/engine/tt.cpp
+    src/engine/uci.h
+    src/engine/uci.cpp
 )
 
 target_include_directories(engine PUBLIC src)
