@@ -26,6 +26,8 @@ add_library(engine STATIC
     src/engine/board.cpp
     src/engine/movegen.h
     src/engine/movegen.cpp
+    src/engine/eval.h
+    src/engine/eval.cpp
 )
 
 target_include_directories(engine PUBLIC src)
