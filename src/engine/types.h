@@ -120,10 +120,10 @@ inline Square lsb(Bitboard b) {
 #endif
 }
 
-inline Bitboard popLsb(Bitboard& b) {
+inline Square popLsb(Bitboard& b) {
     Square s = lsb(b);
     b &= b - 1;
-    return squareBb(s);
+    return s;
 }
 
 // --- Direction shifts ---

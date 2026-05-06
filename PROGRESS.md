@@ -5,7 +5,7 @@
 - [x] `src/engine/types.h` — Core types: Square, Piece, Color, Move, Bitboard, CastlingRights
 - [x] `src/engine/attacks.h/cpp` — Magic bitboard attack tables (bishop/rook/queen), pawn/knight/king precomputed attacks
 - [x] `src/engine/board.h/cpp` — Bitboard representation, make/unmake move, FEN import/export, Zobrist hashing
-- [ ] `src/engine/movegen.h/cpp` — Magic bitboard move generation, legal move filtering, move ordering (MVV-LVA)
+- [x] `src/engine/movegen.h/cpp` — Magic bitboard move generation, legal move filtering, move ordering (MVV-LVA)
 - [ ] `src/engine/eval.h/cpp` — Material counting, piece-square tables, pawn structure evaluation
 - [ ] `src/engine/search.h/cpp` — Negamax alpha-beta, iterative deepening, quiescence search, time management
 - [ ] `src/engine/tt.h/cpp` — Transposition table with Zobrist keys, always-replace scheme

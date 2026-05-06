@@ -24,6 +24,8 @@ add_library(engine STATIC
     src/engine/attacks.cpp
     src/engine/board.h
     src/engine/board.cpp
+    src/engine/movegen.h
+    src/engine/movegen.cpp
 )
 
 target_include_directories(engine PUBLIC src)
@@ -42,3 +44,10 @@ add_executable(test_board
 
 target_link_libraries(test_board PRIVATE engine)
 add_test(NAME board COMMAND test_board)
+
+add_executable(test_movegen
+    test/test_movegen.cpp
+)
+
+target_link_libraries(test_movegen PRIVATE engine)
+add_test(NAME movegen COMMAND test_movegen)
