@@ -98,6 +98,31 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         if (stop_) return 0;
     }
 
+    // TT probe
+    uint64_t hash = board.hash();
+    const TTEntry* ttEntry = tt_.probe(hash);
+    Move ttMove;
+    int ttScore = 0;
+    const int originalAlpha = alpha;
+
+    if (ttEntry) {
+        ttMove = tt_.unpackMove(ttEntry->move);
+        ttScore = ttEntry->score;
+
+        // Mate score adjustment
+        if (ttScore > MATE - MAX_PLY) ttScore -= ply;
+        else if (ttScore < -MATE + MAX_PLY) ttScore += ply;
+
+        if (depth > 0 && ttEntry->depth >= depth) {
+            if (ttEntry->bound == static_cast<uint8_t>(Bound::EXACT))
+                return ttScore;
+            if (ttEntry->bound == static_cast<uint8_t>(Bound::LOWER) && ttScore >= beta)
+                return ttScore;
+            if (ttEntry->bound == static_cast<uint8_t>(Bound::UPPER) && ttScore <= alpha)
+                return ttScore;
+        }
+    }
+
     if (depth <= 0) return quiesce(board, alpha, beta, ply);
 
     MoveList moves;
@@ -107,10 +132,21 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         return board.isInCheck() ? -MATE + ply : 0;
     }
 
+    // Try TT move first
+    if (ttMove.from != SQ_NONE) {
+        for (int i = 0; i < moves.size(); i++) {
+            if (moves[i].from == ttMove.from && moves[i].to == ttMove.to) {
+                std::swap(moves[0], moves[i]);
+                break;
+            }
+        }
+    }
+
     sortMoves(moves, board, ply);
 
     int bestScore = -INF;
     int movesMade = 0;
+    Move bestMoveInNode;
 
     for (const Move& m : moves) {
         UndoInfo undo;
@@ -143,6 +179,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
 
         if (score > bestScore) {
             bestScore = score;
+            bestMoveInNode = m;
             if (score > alpha) {
                 alpha = score;
                 if (ply == 0) bestMoveRoot_ = m;
@@ -153,6 +190,23 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                 }
             }
         }
+    }
+
+    // Store in TT (only if we found at least one legal move)
+    if (bestScore > -INF + 1) {
+        Bound b;
+        if (bestScore <= originalAlpha)
+            b = Bound::UPPER;
+        else if (bestScore >= beta)
+            b = Bound::LOWER;
+        else
+            b = Bound::EXACT;
+
+        int ttStoreScore = bestScore;
+        if (ttStoreScore > MATE - MAX_PLY) ttStoreScore += ply;
+        else if (ttStoreScore < -MATE + MAX_PLY) ttStoreScore -= ply;
+
+        tt_.store(hash, static_cast<int16_t>(ttStoreScore), static_cast<int8_t>(depth), b, bestMoveInNode);
     }
 
     return bestScore;

@@ -3,6 +3,7 @@
 #include "types.h"
 #include "eval.h"
 #include "movegen.h"
+#include "tt.h"
 
 namespace chess {
 
@@ -22,6 +23,8 @@ public:
 
     void setTimeMs(int ms);
     void setInfinite(bool inf);
+    void setTTSize(int mb) { tt_.setSize(mb); }
+    void clearTT() { tt_.clear(); }
     void stop();
     bool isStopped() const { return stop_; }
 
@@ -55,6 +58,7 @@ private:
 
     MoveGenerator gen_;
     Eval eval_;
+    TranspositionTable tt_;
 };
 
 } // namespace chess

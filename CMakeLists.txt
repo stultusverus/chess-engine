@@ -30,6 +30,8 @@ add_library(engine STATIC
     src/engine/eval.cpp
     src/engine/search.h
     src/engine/search.cpp
+    src/engine/tt.h
+    src/engine/tt.cpp
 )
 
 target_include_directories(engine PUBLIC src)

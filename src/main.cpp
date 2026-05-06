@@ -25,6 +25,7 @@ int main() {
 
     // Search
     chess::Search search;
+    search.setTTSize(64);
     search.setTimeMs(3000);
     std::cout << "Searching..." << std::endl;
     auto result = search.search(board, 10);
