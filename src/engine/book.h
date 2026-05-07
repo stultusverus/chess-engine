@@ -23,6 +23,7 @@ public:
 
     std::optional<Move> probe(const Board& board) const;
     static uint64_t polyglotHash(const Board& board);
+    static Move decodePolyglotMove(uint16_t packed);
 
 private:
     struct Entry {
@@ -34,8 +35,6 @@ private:
 
     std::vector<Entry> entries_;
     int maxHalfMoves_ = 20;
-
-    static Move decodePolyglotMove(uint16_t packed);
 };
 
 } // namespace chess

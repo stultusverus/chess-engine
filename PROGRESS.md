@@ -24,12 +24,13 @@
 - [x] `test/test_board.cpp` + `test/test_movegen.cpp` — Board + movegen unit tests. Perft suite
 - [x] `test/test_eval.cpp` — Evaluation tests (material, piece-square, game phase, constants)
 - [x] `test/test_search.cpp` — Search tests (mate detection, captures, promotions, TT, nodes, stop)
+- [x] `test/test_book.cpp` — Opening book tests (hash correctness, load/probe, decode, maxPly, weighted random)
 - [x] End-to-end verified — bot plays complete games on Lichess vs Stockfish AI
 - [ ] Auto-resign when eval drops below threshold
 - [ ] Auto-accept/offer draw when eval is near zero
 - [ ] Chat messages (GG on game end)
 - [ ] Move overrides (resign/draw commands from operator)
 - [x] Opening book support — Polyglot (.bin) format, `src/engine/book.h/cpp`, `--book` flag
+- [x] Book polish — fixed RNG seeding, bswap32, bulk-read, deduplicated probe logic, unit tests
+- [x] UCI position parser fix — moves after `position startpos` now correctly applied
 - [ ] Search evaluation improvements (king safety, pawn structure, mobility)
-- [ ] Book: fix RNG seeding (use `std::random_device`); fix `bswap32` to use builtin; bulk-read book file; deduplicate probe logic in manager.cpp; add book unit tests
-- [ ] Book: fix UCI position parser — moves after `startpos` were consumed but not applied on first token

@@ -80,3 +80,7 @@ add_test(NAME eval COMMAND test_eval)
 add_executable(test_search test/test_search.cpp)
 target_link_libraries(test_search PRIVATE engine)
 add_test(NAME search COMMAND test_search)
+
+add_executable(test_book test/test_book.cpp)
+target_link_libraries(test_book PRIVATE engine)
+add_test(NAME book COMMAND test_book)

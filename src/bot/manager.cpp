@@ -25,6 +25,17 @@ void Manager::setBookPath(const std::string& path) {
     book_.load(path);
 }
 
+bool Manager::tryBookMove(const std::string& gameId, GameContext& ctx) {
+    auto bookMove = book_.probe(ctx.board);
+    if (bookMove) {
+        dbg(gameId, "book move=" + moveToString(*bookMove));
+        client_.makeMove(gameId, moveToString(*bookMove));
+        ctx.ourTurn = false;
+        return true;
+    }
+    return false;
+}
+
 void Manager::challengeOpponent(const std::string& username, int clockLimit, int clockInc, bool rated) {
     std::cerr << "Challenging " << username
               << " (" << clockLimit << "+" << clockInc << (rated ? ", rated" : ", casual") << ")"
@@ -272,13 +283,7 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
             std::cerr << "[" << gameId << "] Thinking (time=" << timeMs << "ms)..." << std::endl;
             dbg(gameId, "searching with time=" + std::to_string(timeMs) + "ms");
 
-            auto bookMove = book_.probe(ctx.board);
-            if (bookMove) {
-                dbg(gameId, "book move=" + moveToString(*bookMove));
-                client_.makeMove(gameId, moveToString(*bookMove));
-                ctx.ourTurn = false;
-                return;
-            }
+            if (tryBookMove(gameId, ctx)) return;
 
             ctx.search.setTimeMs(timeMs);
             auto result = ctx.search.search(ctx.board);
@@ -329,13 +334,7 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
         if (ctx.ourTurn) {
             dbg(gameId, "our turn, wtime=" + std::to_string(ctx.wtime) + " btime=" + std::to_string(ctx.btime));
 
-            auto bookMove = book_.probe(ctx.board);
-            if (bookMove) {
-                dbg(gameId, "book move=" + moveToString(*bookMove));
-                client_.makeMove(gameId, moveToString(*bookMove));
-                ctx.ourTurn = false;
-                return;
-            }
+            if (tryBookMove(gameId, ctx)) return;
 
             int timeMs = (ctx.color == "white") ? ctx.wtime : ctx.btime;
             int incMs = 0;

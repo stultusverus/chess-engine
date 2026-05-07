@@ -2,7 +2,6 @@
 #include "board.h"
 #include "poly_keys.h"
 #include <algorithm>
-#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -82,7 +81,7 @@ static uint16_t bswap16(uint16_t x) {
 }
 
 static uint32_t bswap32(uint32_t x) {
-    return (x >> 24) | ((x >> 8) & 0xFF00) | ((x << 8) & 0xFF0000) | (x << 24);
+    return __builtin_bswap32(x);
 }
 
 bool Book::load(const std::string& path) {
@@ -105,18 +104,21 @@ bool Book::load(const std::string& path) {
 
     file.seekg(0, std::ios::beg);
 
-    std::vector<char> buf(16);
-    for (size_t i = 0; i < entryCount; i++) {
-        file.read(buf.data(), 16);
+    // Bulk-read entire file in one shot
+    std::vector<char> buf(fileSize);
+    file.read(buf.data(), static_cast<std::streamsize>(fileSize));
+
+    const char* p = buf.data();
+    for (size_t i = 0; i < entryCount; i++, p += 16) {
         Entry& e = entries_[i];
 
         uint64_t key;
         uint16_t move, weight;
         uint32_t learn;
-        std::memcpy(&key, buf.data(), 8);
-        std::memcpy(&move, buf.data() + 8, 2);
-        std::memcpy(&weight, buf.data() + 10, 2);
-        std::memcpy(&learn, buf.data() + 12, 4);
+        std::memcpy(&key, p, 8);
+        std::memcpy(&move, p + 8, 2);
+        std::memcpy(&weight, p + 10, 2);
+        std::memcpy(&learn, p + 12, 4);
 
         e.key = bswap64(key);
         e.move = bswap16(move);
@@ -174,10 +176,7 @@ std::optional<Move> Book::probe(const Board& board) const {
     if (totalWeight == 0)
         return std::nullopt;
 
-    // Use a fast PRNG seeded with time for variety
-    static std::mt19937_64 rng(
-        static_cast<uint64_t>(
-            std::chrono::steady_clock::now().time_since_epoch().count()));
+    static std::mt19937_64 rng(std::random_device{}());
     uint64_t r = rng() % totalWeight;
 
     uint64_t cumulative = 0;
