@@ -86,9 +86,11 @@ void Board::setFen(const std::string& fen) {
             case 'b': p = B_BISHOP; break; case 'r': p = B_ROOK; break;
             case 'q': p = B_QUEEN; break; case 'k': p = B_KING; break;
             }
-            byPiece_[p] |= squareBb(sq);
-            byColor_[colorOf(p)] |= squareBb(sq);
-            mailbox_[sq] = p;
+            if (p != NO_PIECE) {
+                byPiece_[p] |= squareBb(sq);
+                byColor_[colorOf(p)] |= squareBb(sq);
+                mailbox_[sq] = p;
+            }
             sq = Square(sq + 1);
         }
     }

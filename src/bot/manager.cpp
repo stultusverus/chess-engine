@@ -198,19 +198,37 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
         std::string whiteId = state["white"].value("id", "");
         std::string blackId = state["black"].value("id", "");
 
-        // Determine our color
-        // We need to know our bot's user ID. For now, use account info.
+        // Determine our color - match by ID or username
         json account = client_.getAccount();
         std::string botId = account.value("id", "");
+        std::string botName = account.value("username", "");
 
-        if (whiteId == botId) {
+        if (whiteId == botId || whiteId == botName) {
             ctx.color = "white";
-        } else if (blackId == botId) {
+        } else if (blackId == botId || blackId == botName) {
             ctx.color = "black";
         }
 
+        // Fallback: check if our name appears in the opponent field
+        if (ctx.color.empty()) {
+            std::string whiteName = state["white"].value("name", "");
+            std::string blackName = state["black"].value("name", "");
+            if (whiteName == botName || whiteId == botId) ctx.color = "white";
+            else if (blackName == botName || blackId == botId) ctx.color = "black";
+        }
+
+        // If still unknown, use the gameStart event color hint
+        if (ctx.color.empty()) {
+            std::cerr << "[" << gameId << "] WARNING: could not determine color."
+                      << " whiteId=" << whiteId << " blackId=" << blackId
+                      << " botId=" << botId << " botName=" << botName << std::endl;
+            std::cerr << "[" << gameId << "] FEN=" << ctx.board.fen() << std::endl;
+            return;
+        }
+
         // Parse initial FEN
-        std::string fen = state.value("initialFen", chess::STARTPOS_FEN);
+        std::string fen = state.value("initialFen", std::string("startpos"));
+        if (fen.empty() || fen == "startpos") fen = chess::STARTPOS_FEN;
         ctx.board.setFen(fen);
 
         // Apply moves from initial state
@@ -241,10 +259,12 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
         } else {
             std::cerr << "[" << gameId << "] Playing as " << ctx.color << std::endl;
         }
+        std::cerr << std::flush; // Ensure output before potential blocking search
 
         if (ctx.ourTurn) {
             int timeMs = (ctx.color == "white") ? ctx.wtime : ctx.btime;
             timeMs = (timeMs > 0) ? timeMs / 30 : 5000;
+            std::cerr << "[" << gameId << "] Thinking (time=" << timeMs << "ms)..." << std::endl;
             dbg(gameId, "searching with time=" + std::to_string(timeMs) + "ms");
 
             ctx.search.setTimeMs(timeMs);
