@@ -160,6 +160,7 @@ std::string Board::fen() const {
 }
 
 void Board::putPiece(Piece p, Square s) {
+    if (p == NO_PIECE) return;
     byPiece_[p] |= squareBb(s);
     byColor_[colorOf(p)] |= squareBb(s);
     mailbox_[s] = p;
@@ -167,6 +168,7 @@ void Board::putPiece(Piece p, Square s) {
 }
 
 void Board::removePiece(Piece p, Square s) {
+    if (p == NO_PIECE) return;
     byPiece_[p] &= ~squareBb(s);
     byColor_[colorOf(p)] &= ~squareBb(s);
     mailbox_[s] = NO_PIECE;
@@ -186,7 +188,9 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
     undo.captured = NO_PIECE;
 
     Piece p = mailbox_[move.from];
+    if (p == NO_PIECE) return false;
     Color us = stm_;
+    if (colorOf(p) != us) return false;
     PieceType pt = typeOf(p);
 
     // Classify move if not pre-classified
