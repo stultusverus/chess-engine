@@ -16,8 +16,19 @@ Manager::~Manager() {
     running_ = false;
 }
 
+void Manager::setDebug(bool v) {
+    debug_ = v;
+    client_.setDebug(v);
+}
+
 void Manager::run() {
     std::cerr << "Bot manager starting..." << std::endl;
+    if (debug_) {
+        std::cerr << "[debug] Debug mode enabled" << std::endl;
+        std::cerr << "[debug] Challenge policy: rated=" << (acceptRated_ ? "only" : "any")
+                  << " time=[" << minTime_ << "," << maxTime_ << "]"
+                  << " min_inc=" << minInc_ << std::endl;
+    }
 
     client_.streamEvents([this](const json& ev) {
         if (!running_) return;
@@ -27,6 +38,7 @@ void Manager::run() {
 
 void Manager::onEvent(const json& ev) {
     std::string type = ev.value("type", "");
+    if (debug_) std::cerr << "[event] type=" << type << std::endl;
 
     if (type == "challenge") {
         handleChallenge(ev["challenge"]);
@@ -44,11 +56,22 @@ void Manager::handleChallenge(const json& challenge) {
     int limit = tc.value("limit", 0);
     int increment = tc.value("increment", 0);
     std::string challenger = challenge.value("challenger", json::object()).value("name", "?");
+    std::string variant = challenge.value("variant", json::object()).value("key", "standard");
+
+    if (debug_) {
+        std::cerr << "[challenge] raw=" << challenge.dump() << std::endl;
+    }
 
     std::cerr << "Challenge from " << challenger
-              << " (rated=" << rated << " time=" << limit << "+" << increment << ")" << std::endl;
+              << " (rated=" << rated << " time=" << limit << "+" << increment
+              << " variant=" << variant << ")" << std::endl;
 
     // Apply policy
+    if (variant != "standard") {
+        std::cerr << "  Declining: only standard chess" << std::endl;
+        client_.declineChallenge(id, "Only playing standard chess");
+        return;
+    }
     if (acceptRated_ && !rated) {
         std::cerr << "  Declining: rated-only mode" << std::endl;
         client_.declineChallenge(id, "Only accepting rated games");
@@ -105,6 +128,8 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
     std::string type = state.value("type", "");
 
     if (type == "gameFull") {
+        dbg(gameId, "gameFull event received");
+
         // Initialize game
         std::string whiteId = state["white"].value("id", "");
         std::string blackId = state["black"].value("id", "");
@@ -143,15 +168,26 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
         ctx.ourTurn = (ctx.board.sideToMove() == chess::WHITE && ctx.color == "white")
                    || (ctx.board.sideToMove() == chess::BLACK && ctx.color == "black");
 
-        std::cerr << "[" << gameId << "] Playing as " << ctx.color << std::endl;
+        if (debug_) {
+            std::cerr << "[" << gameId << "] Playing as " << ctx.color
+                      << " (bot=" << botId << " white=" << whiteId << " black=" << blackId << ")"
+                      << std::endl;
+            std::cerr << "[" << gameId << "] FEN: " << ctx.board.fen() << std::endl;
+            std::cerr << "[" << gameId << "] Our turn: " << (ctx.ourTurn ? "yes" : "no") << std::endl;
+        } else {
+            std::cerr << "[" << gameId << "] Playing as " << ctx.color << std::endl;
+        }
 
         if (ctx.ourTurn) {
-            // Start search
             int timeMs = (ctx.color == "white") ? ctx.wtime : ctx.btime;
             timeMs = (timeMs > 0) ? timeMs / 30 : 5000;
-            ctx.search.setTimeMs(timeMs);
+            dbg(gameId, "searching with time=" + std::to_string(timeMs) + "ms");
 
+            ctx.search.setTimeMs(timeMs);
             auto result = ctx.search.search(ctx.board);
+            dbg(gameId, "bestmove=" + moveToString(result.bestMove) + " score=" + std::to_string(result.score)
+                + " depth=" + std::to_string(result.depth) + " nodes=" + std::to_string(result.nodes));
+
             client_.makeMove(gameId, moveToString(result.bestMove));
             ctx.ourTurn = false;
         }
@@ -160,22 +196,9 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
         // Update board with new moves
         std::string moves = state.value("moves", "");
         if (!moves.empty()) {
-            // The "moves" string in gameState contains the full move list.
-            // We need to diff with what we have.
-            // For simplicity, re-parse the full FEN with all moves applied.
-            // Actually, gameState only sends NEW moves since last update.
-            // Let's parse individual UCI moves from the string.
-            // Actually the gameState "moves" field is the full move list.
-            // We'll compare against our board's current move count.
-            // Simpler approach: re-setup from the state's moves.
-
-            // Count moves played so far from board state (fullMoves can help)
-            // Simpler: just re-apply from FEN with all moves.
-            // In gameState events, we only get the moves string for moves
-            // made since gameFull. Let's parse and apply.
-
             std::istringstream ss(moves);
             std::string uci;
+            int appliedCount = 0;
             while (ss >> uci) {
                 Square from = stringToSquare(uci.substr(0, 2));
                 Square to = stringToSquare(uci.substr(2, 2));
@@ -183,12 +206,12 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
                 if (uci.size() > 4) promo = charToPieceType(uci[4]);
                 Move m(from, to, promo);
                 chess::UndoInfo undo;
-                // Only apply if it's a new move (our board might already have it)
-                // For simplicity, just try each move and skip illegal ones
                 if (ctx.board.isMoveLegal(m)) {
                     ctx.board.makeMove(m, undo);
+                    appliedCount++;
                 }
             }
+            dbg(gameId, "applied " + std::to_string(appliedCount) + " moves, FEN: " + ctx.board.fen());
         }
 
         // Update clock times
@@ -207,7 +230,7 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
         }
 
         if (ctx.ourTurn) {
-            std::cerr << "[" << gameId << "] Our turn, thinking..." << std::endl;
+            dbg(gameId, "our turn, wtime=" + std::to_string(ctx.wtime) + " btime=" + std::to_string(ctx.btime));
 
             int timeMs = (ctx.color == "white") ? ctx.wtime : ctx.btime;
             int incMs = 0;
@@ -215,10 +238,14 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
             if (timeMs < 100) timeMs = 100;
             if (timeMs > 10000) timeMs = 10000;
 
+            dbg(gameId, "searching with time=" + std::to_string(timeMs) + "ms");
+
             ctx.search.setTimeMs(timeMs);
             auto result = ctx.search.search(ctx.board);
 
-            std::cerr << "[" << gameId << "] Playing " << moveToString(result.bestMove) << std::endl;
+            dbg(gameId, "bestmove=" + moveToString(result.bestMove) + " score=" + std::to_string(result.score)
+                + " depth=" + std::to_string(result.depth) + " nodes=" + std::to_string(result.nodes));
+
             client_.makeMove(gameId, moveToString(result.bestMove));
             ctx.ourTurn = false;
         }

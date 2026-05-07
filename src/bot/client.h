@@ -19,6 +19,8 @@ public:
     Client(const std::string& token);
     ~Client();
 
+    void setDebug(bool v) { debug_ = v; }
+
     // Account
     json getAccount();
 
@@ -51,6 +53,7 @@ private:
 
     std::string token_;
     std::string baseUrl_;
+    bool debug_ = false;
 };
 
 } // namespace bot

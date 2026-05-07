@@ -3,6 +3,7 @@
 #include "client.h"
 #include "engine/board.h"
 #include "engine/search.h"
+#include <iostream>
 #include <string>
 #include <thread>
 #include <atomic>
@@ -17,6 +18,7 @@ public:
     ~Manager();
 
     void run();
+    void setDebug(bool v);
 
     // Challenge policy
     void setAcceptRated(bool v) { acceptRated_ = v; }
@@ -34,6 +36,12 @@ private:
 
     Client client_;
     std::atomic<bool> running_{true};
+    bool debug_ = false;
+
+    // Shortcut for game-prefixed debug output
+    void dbg(const std::string& gameId, const std::string& msg) const {
+        if (debug_) std::cerr << "[" << gameId << "] " << msg << std::endl;
+    }
 
     // Challenge policy
     bool acceptRated_ = false;

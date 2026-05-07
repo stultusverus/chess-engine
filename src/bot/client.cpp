@@ -1,4 +1,5 @@
 #include "client.h"
+#include <iostream>
 #include <sstream>
 
 namespace chess {
@@ -20,8 +21,11 @@ size_t Client::writeCallback(void* contents, size_t size, size_t nmemb, std::str
 }
 
 std::string Client::get(const std::string& url) {
+    if (debug_) std::cerr << "[http] GET " << url << std::endl;
+
     CURL* curl = curl_easy_init();
     std::string response;
+    long httpCode = 0;
     if (curl) {
         struct curl_slist* headers = nullptr;
         headers = curl_slist_append(headers, ("Authorization: Bearer " + token_).c_str());
@@ -31,15 +35,24 @@ std::string Client::get(const std::string& url) {
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "chess-engine/1.0");
         curl_easy_perform(curl);
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
         curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
     }
+    if (debug_) std::cerr << "[http]  -> " << httpCode << " (" << response.size() << " bytes)" << std::endl;
     return response;
 }
 
 std::string Client::post(const std::string& url, const std::string& data) {
+    if (debug_) {
+        std::cerr << "[http] POST " << url;
+        if (!data.empty()) std::cerr << " body=" << data;
+        std::cerr << std::endl;
+    }
+
     CURL* curl = curl_easy_init();
     std::string response;
+    long httpCode = 0;
     if (curl) {
         struct curl_slist* headers = nullptr;
         headers = curl_slist_append(headers, ("Authorization: Bearer " + token_).c_str());
@@ -52,15 +65,18 @@ std::string Client::post(const std::string& url, const std::string& data) {
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "chess-engine/1.0");
         curl_easy_perform(curl);
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
         curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
     }
+    if (debug_) std::cerr << "[http]  -> " << httpCode << " (" << response.size() << " bytes)" << std::endl;
     return response;
 }
 
 struct StreamContext {
     StreamCallback callback;
     std::string buffer;
+    bool debug = false;
 };
 
 size_t Client::streamLineCallback(void* contents, size_t size, size_t nmemb, void* userp) {
@@ -76,9 +92,10 @@ size_t Client::streamLineCallback(void* contents, size_t size, size_t nmemb, voi
         if (!line.empty()) {
             try {
                 json j = json::parse(line);
+                if (ctx->debug) std::cerr << "[stream] " << j.dump() << std::endl;
                 ctx->callback(j);
             } catch (...) {
-                // Skip malformed lines
+                if (ctx->debug) std::cerr << "[stream] (unparseable) " << line << std::endl;
             }
         }
     }
@@ -86,9 +103,11 @@ size_t Client::streamLineCallback(void* contents, size_t size, size_t nmemb, voi
 }
 
 void Client::streamGet(const std::string& url, StreamCallback callback) {
+    if (debug_) std::cerr << "[stream] connecting to " << url << std::endl;
+
     CURL* curl = curl_easy_init();
     if (curl) {
-        StreamContext ctx{callback, ""};
+        StreamContext ctx{callback, "", debug_};
         struct curl_slist* headers = nullptr;
         headers = curl_slist_append(headers, ("Authorization: Bearer " + token_).c_str());
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
