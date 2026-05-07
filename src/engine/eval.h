@@ -26,8 +26,14 @@ public:
 
 private:
     int material(const Board& board) const;
-    int pieceSquare(const Board& board) const;
+    int pieceSquare(const Board& board, int phase) const;
     int gamePhase(const Board& board) const;
+    int pawnStructure(const Board& board) const;
+    int mobility(const Board& board, int phase) const;
+    int bishopPair(const Board& board, int phase) const;
+    int rookOnFile(const Board& board, int phase) const;
+    int kingSafety(const Board& board, int phase) const;
+    int tempo(const Board& board) const;
 };
 
 } // namespace chess

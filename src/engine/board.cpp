@@ -340,6 +340,29 @@ void Board::unmakeMove(Move /*move*/, const UndoInfo& undo) {
     }
 }
 
+void Board::makeNullMove(NullUndo& undo) {
+    undo.oldEp = ep_;
+    undo.oldHalfMoves = halfMoves_;
+    undo.oldHash = hash_;
+
+    hash_ ^= zobristSide_;
+    stm_ = ~stm_;
+
+    if (ep_ != SQ_NONE) {
+        hash_ ^= zobristEp_[fileOf(ep_)];
+        ep_ = SQ_NONE;
+    }
+
+    halfMoves_++;
+}
+
+void Board::unmakeNullMove(const NullUndo& undo) {
+    stm_ = ~stm_;
+    ep_ = undo.oldEp;
+    halfMoves_ = undo.oldHalfMoves;
+    hash_ = undo.oldHash;
+}
+
 bool Board::isMoveLegal(Move move) const {
     Board temp = *this;
     UndoInfo undo;

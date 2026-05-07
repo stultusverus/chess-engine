@@ -147,6 +147,28 @@ void test_ttSpeedup() {
     CHECK(t2 <= t1 * 2 + 10);
 }
 
+// Null move pruning engages at depth >= 4; verify depth-5 search still works
+void test_searchDepth5() {
+    chess::Search search;
+    chess::Board b;
+    search.setInfinite(true);
+    auto result = search.search(b, 5);
+    CHECK(result.bestMove.from != chess::SQ_NONE);
+    CHECK(result.depth >= 4);
+    CHECK(result.nodes > 0);
+}
+
+// Null move + mate guard: ensure mate-in-1 is found even at depth >= 4
+void test_nullMoveMateGuard() {
+    chess::Search search;
+    chess::Board b("1k6/ppp5/8/8/8/8/PPP5/1K1R4 w - - 0 1");
+    search.setInfinite(true);
+    auto result = search.search(b, 6);
+    CHECK(result.score > 900000);
+    CHECK(result.bestMove.from == chess::D1);
+    CHECK(result.bestMove.to == chess::D8);
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -163,6 +185,8 @@ int main() {
     RUN_TEST(promotionPreference);
     RUN_TEST(searchDifferentPositions);
     RUN_TEST(ttSpeedup);
+    RUN_TEST(searchDepth5);
+    RUN_TEST(nullMoveMateGuard);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

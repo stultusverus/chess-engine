@@ -125,6 +125,20 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
 
     if (depth <= 0) return quiesce(board, alpha, beta, ply);
 
+    // Null move pruning (skip when searching mate lines)
+    if (depth >= 4 && !board.isInCheck() && beta < MATE - MAX_PLY) {
+        Bitboard stmAll = board.pieces(board.sideToMove());
+        Bitboard stmPawnKing = board.pieces(board.sideToMove(), KING) | board.pieces(board.sideToMove(), PAWN);
+        if (stmAll != stmPawnKing) {
+            NullUndo nullUndo;
+            board.makeNullMove(nullUndo);
+            int R = 3 + depth / 4;
+            int score = -alphaBeta(board, depth - 1 - R, -beta, -beta + 1, ply + 1);
+            board.unmakeNullMove(nullUndo);
+            if (score >= beta) return beta;
+        }
+    }
+
     MoveList moves;
     gen_.generateMoves(board, moves);
 

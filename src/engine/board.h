@@ -8,6 +8,7 @@
 namespace chess {
 
 struct UndoInfo;
+struct NullUndo;
 
 class Board {
 public:
@@ -41,6 +42,10 @@ public:
     int fullMoveNumber() const { return fullMoves_; }
     uint64_t hash() const { return hash_; }
 
+    // Null move (for search pruning)
+    void makeNullMove(NullUndo& undo);
+    void unmakeNullMove(const NullUndo& undo);
+
     // King square lookup
     Square kingSquare(Color c) const;
 
@@ -68,6 +73,12 @@ struct UndoInfo {
     Piece captured;
     Square oldEp;
     int oldCastle;
+    int oldHalfMoves;
+    uint64_t oldHash;
+};
+
+struct NullUndo {
+    Square oldEp;
     int oldHalfMoves;
     uint64_t oldHash;
 };

@@ -1,7 +1,14 @@
 #include "eval.h"
 #include "board.h"
+#include "attacks.h"
+#include <algorithm>
 
 namespace chess {
+
+// --- Helpers ---
+static constexpr Bitboard fileBb(File f) {
+    return 0x0101010101010101ULL << f;
+}
 
 // --- PeSTO Piece-Square Tables (from white's perspective, rank 1 at bottom) ---
 // MG = middlegame, EG = endgame
@@ -151,6 +158,34 @@ static const int* egTables[PIECE_TYPE_NB] = {
     pawnEG, knightEG, bishopEG, rookEG, queenEG, kingEG,
 };
 
+// --- Evaluation term constants ---
+static constexpr int DOUBLED_PAWN_PENALTY   = 15;
+static constexpr int ISOLATED_PAWN_PENALTY  = 15;
+static constexpr int PASSED_PAWN_BONUS[8]   = {0, 0, 5, 10, 20, 35, 60, 0};
+
+static constexpr int KNIGHT_MOBILITY_MG = 4;
+static constexpr int KNIGHT_MOBILITY_EG = 4;
+static constexpr int BISHOP_MOBILITY_MG = 3;
+static constexpr int BISHOP_MOBILITY_EG = 3;
+static constexpr int ROOK_MOBILITY_MG   = 2;
+static constexpr int ROOK_MOBILITY_EG   = 3;
+static constexpr int QUEEN_MOBILITY_MG  = 1;
+static constexpr int QUEEN_MOBILITY_EG  = 2;
+static constexpr int KING_MOBILITY_MG   = 0;
+static constexpr int KING_MOBILITY_EG   = 2;
+
+static constexpr int BISHOP_PAIR_MG = 30;
+static constexpr int BISHOP_PAIR_EG = 50;
+
+static constexpr int ROOK_OPEN_FILE_MG      = 20;
+static constexpr int ROOK_OPEN_FILE_EG      = 25;
+static constexpr int ROOK_SEMI_OPEN_FILE_MG = 10;
+static constexpr int ROOK_SEMI_OPEN_FILE_EG = 15;
+
+static constexpr int KING_SHIELD_BONUS = 10;
+static constexpr int KING_OPEN_FILE_PENALTY = 15;
+static constexpr int TEMPO_BONUS = 15;
+
 int Eval::material(const Board& board) const {
     int score = 0;
     for (PieceType pt = PAWN; pt < KING; pt = PieceType(pt + 1)) {
@@ -161,7 +196,7 @@ int Eval::material(const Board& board) const {
     return score;
 }
 
-int Eval::pieceSquare(const Board& board) const {
+int Eval::pieceSquare(const Board& board, int phase) const {
     int mgScore = 0, egScore = 0;
 
     for (PieceType pt = PAWN; pt <= KING; pt = PieceType(pt + 1)) {
@@ -186,9 +221,277 @@ int Eval::pieceSquare(const Board& board) const {
     }
 
     // Tapered evaluation
-    int phase = gamePhase(board);
-    if (phase > totalPhase) phase = totalPhase;
+
     return (mgScore * phase + egScore * (totalPhase - phase)) / totalPhase;
+}
+
+int Eval::pawnStructure(const Board& board) const {
+    int score = 0;
+
+    Bitboard wPawns = board.pieces(WHITE, PAWN);
+    Bitboard bPawns = board.pieces(BLACK, PAWN);
+
+    // Doubled and isolated pawns
+    for (int f = FILE_A; f <= FILE_H; f++) {
+        int wCnt = popcount(wPawns & fileBb(File(f)));
+        int bCnt = popcount(bPawns & fileBb(File(f)));
+
+        if (wCnt > 1) score -= (wCnt - 1) * DOUBLED_PAWN_PENALTY;
+        if (bCnt > 1) score += (bCnt - 1) * DOUBLED_PAWN_PENALTY;
+
+        if (wCnt > 0) {
+            bool hasNeighbor = (f > FILE_A && (wPawns & fileBb(File(f - 1)))) ||
+                               (f < FILE_H && (wPawns & fileBb(File(f + 1))));
+            if (!hasNeighbor) {
+                int penalty = (f == FILE_A || f == FILE_H) ? ISOLATED_PAWN_PENALTY / 2 : ISOLATED_PAWN_PENALTY;
+                score -= wCnt * penalty;
+            }
+        }
+        if (bCnt > 0) {
+            bool hasNeighbor = (f > FILE_A && (bPawns & fileBb(File(f - 1)))) ||
+                               (f < FILE_H && (bPawns & fileBb(File(f + 1))));
+            if (!hasNeighbor) {
+                int penalty = (f == FILE_A || f == FILE_H) ? ISOLATED_PAWN_PENALTY / 2 : ISOLATED_PAWN_PENALTY;
+                score += bCnt * penalty;
+            }
+        }
+    }
+
+    // Passed pawns
+    Bitboard wp = wPawns;
+    while (wp) {
+        Square s = popLsb(wp);
+        File f = fileOf(s);
+        Rank r = rankOf(s);
+        Bitboard front = 0;
+        for (Rank rr = Rank(r + 1); rr <= RANK_8; rr = Rank(rr + 1)) {
+            front |= squareBb(makeSquare(f, rr));
+            if (f > FILE_A) front |= squareBb(makeSquare(File(f - 1), rr));
+            if (f < FILE_H) front |= squareBb(makeSquare(File(f + 1), rr));
+        }
+        if (!(front & bPawns))
+            score += PASSED_PAWN_BONUS[r];
+    }
+
+    Bitboard bp = bPawns;
+    while (bp) {
+        Square s = popLsb(bp);
+        File f = fileOf(s);
+        Rank r = rankOf(s);
+        Bitboard front = 0;
+        for (Rank rr = RANK_1; rr < r; rr = Rank(rr + 1)) {
+            front |= squareBb(makeSquare(f, rr));
+            if (f > FILE_A) front |= squareBb(makeSquare(File(f - 1), rr));
+            if (f < FILE_H) front |= squareBb(makeSquare(File(f + 1), rr));
+        }
+        if (!(front & wPawns))
+            score -= PASSED_PAWN_BONUS[RANK_8 - r];
+    }
+
+    return score;
+}
+
+int Eval::mobility(const Board& board, int phase) const {
+    int mgScore = 0, egScore = 0;
+    Bitboard occ = board.occupied();
+
+    // White
+    Bitboard wFriendly = board.pieces(WHITE);
+    Bitboard wKnights = board.pieces(WHITE, KNIGHT);
+    while (wKnights) {
+        int moves = popcount(attacks::knightAttacks(popLsb(wKnights)) & ~wFriendly);
+        mgScore += moves * KNIGHT_MOBILITY_MG;
+        egScore += moves * KNIGHT_MOBILITY_EG;
+    }
+    Bitboard wBishops = board.pieces(WHITE, BISHOP);
+    while (wBishops) {
+        int moves = popcount(attacks::bishopAttacks(popLsb(wBishops), occ) & ~wFriendly);
+        mgScore += moves * BISHOP_MOBILITY_MG;
+        egScore += moves * BISHOP_MOBILITY_EG;
+    }
+    Bitboard wRooks = board.pieces(WHITE, ROOK);
+    while (wRooks) {
+        int moves = popcount(attacks::rookAttacks(popLsb(wRooks), occ) & ~wFriendly);
+        mgScore += moves * ROOK_MOBILITY_MG;
+        egScore += moves * ROOK_MOBILITY_EG;
+    }
+    Bitboard wQueens = board.pieces(WHITE, QUEEN);
+    while (wQueens) {
+        int moves = popcount(attacks::queenAttacks(popLsb(wQueens), occ) & ~wFriendly);
+        mgScore += moves * QUEEN_MOBILITY_MG;
+        egScore += moves * QUEEN_MOBILITY_EG;
+    }
+    Bitboard wKings = board.pieces(WHITE, KING);
+    while (wKings) {
+        int moves = popcount(attacks::kingAttacks(popLsb(wKings)) & ~wFriendly);
+        mgScore += moves * KING_MOBILITY_MG;
+        egScore += moves * KING_MOBILITY_EG;
+    }
+
+    // Black
+    Bitboard bFriendly = board.pieces(BLACK);
+    Bitboard bKnights = board.pieces(BLACK, KNIGHT);
+    while (bKnights) {
+        int moves = popcount(attacks::knightAttacks(popLsb(bKnights)) & ~bFriendly);
+        mgScore -= moves * KNIGHT_MOBILITY_MG;
+        egScore -= moves * KNIGHT_MOBILITY_EG;
+    }
+    Bitboard bBishops = board.pieces(BLACK, BISHOP);
+    while (bBishops) {
+        int moves = popcount(attacks::bishopAttacks(popLsb(bBishops), occ) & ~bFriendly);
+        mgScore -= moves * BISHOP_MOBILITY_MG;
+        egScore -= moves * BISHOP_MOBILITY_EG;
+    }
+    Bitboard bRooks = board.pieces(BLACK, ROOK);
+    while (bRooks) {
+        int moves = popcount(attacks::rookAttacks(popLsb(bRooks), occ) & ~bFriendly);
+        mgScore -= moves * ROOK_MOBILITY_MG;
+        egScore -= moves * ROOK_MOBILITY_EG;
+    }
+    Bitboard bQueens = board.pieces(BLACK, QUEEN);
+    while (bQueens) {
+        int moves = popcount(attacks::queenAttacks(popLsb(bQueens), occ) & ~bFriendly);
+        mgScore -= moves * QUEEN_MOBILITY_MG;
+        egScore -= moves * QUEEN_MOBILITY_EG;
+    }
+    Bitboard bKings = board.pieces(BLACK, KING);
+    while (bKings) {
+        int moves = popcount(attacks::kingAttacks(popLsb(bKings)) & ~bFriendly);
+        mgScore -= moves * KING_MOBILITY_MG;
+        egScore -= moves * KING_MOBILITY_EG;
+    }
+
+    return (mgScore * phase + egScore * (totalPhase - phase)) / totalPhase;
+}
+
+int Eval::bishopPair(const Board& board, int phase) const {
+    int mgScore = 0, egScore = 0;
+
+    if (popcount(board.pieces(WHITE, BISHOP)) >= 2) {
+        mgScore += BISHOP_PAIR_MG;
+        egScore += BISHOP_PAIR_EG;
+    }
+    if (popcount(board.pieces(BLACK, BISHOP)) >= 2) {
+        mgScore -= BISHOP_PAIR_MG;
+        egScore -= BISHOP_PAIR_EG;
+    }
+
+
+    return (mgScore * phase + egScore * (totalPhase - phase)) / totalPhase;
+}
+
+int Eval::rookOnFile(const Board& board, int phase) const {
+    int mgScore = 0, egScore = 0;
+    Bitboard wPawns = board.pieces(WHITE, PAWN);
+    Bitboard bPawns = board.pieces(BLACK, PAWN);
+
+    Bitboard wRooks = board.pieces(WHITE, ROOK);
+    while (wRooks) {
+        Square sq = popLsb(wRooks);
+        File f = fileOf(sq);
+        Bitboard fileMask = fileBb(f);
+        bool hasWPawn = fileMask & wPawns;
+        bool hasBPawn = fileMask & bPawns;
+        if (!hasWPawn) {
+            if (!hasBPawn) {
+                mgScore += ROOK_OPEN_FILE_MG;
+                egScore += ROOK_OPEN_FILE_EG;
+            } else {
+                mgScore += ROOK_SEMI_OPEN_FILE_MG;
+                egScore += ROOK_SEMI_OPEN_FILE_EG;
+            }
+        }
+    }
+
+    Bitboard bRooks = board.pieces(BLACK, ROOK);
+    while (bRooks) {
+        Square sq = popLsb(bRooks);
+        File f = fileOf(sq);
+        Bitboard fileMask = fileBb(f);
+        bool hasWPawn = fileMask & wPawns;
+        bool hasBPawn = fileMask & bPawns;
+        if (!hasBPawn) {
+            if (!hasWPawn) {
+                mgScore -= ROOK_OPEN_FILE_MG;
+                egScore -= ROOK_OPEN_FILE_EG;
+            } else {
+                mgScore -= ROOK_SEMI_OPEN_FILE_MG;
+                egScore -= ROOK_SEMI_OPEN_FILE_EG;
+            }
+        }
+    }
+
+
+    return (mgScore * phase + egScore * (totalPhase - phase)) / totalPhase;
+}
+
+int Eval::kingSafety(const Board& board, int phase) const {
+    int mgScore = 0;
+
+    // White king shield
+    Square wKing = board.kingSquare(WHITE);
+    {
+        int kf = fileOf(wKing);
+        int kr = rankOf(wKing);
+        int fStart = std::max(int(FILE_A), kf - 1);
+        int fEnd   = std::min(int(FILE_H), kf + 1);
+
+        int shield = 0;
+        int rStart = kr + 1;
+        int rEnd   = std::min(int(RANK_8), kr + 2);
+        for (int f = fStart; f <= fEnd; f++) {
+            for (int r = rStart; r <= rEnd; r++) {
+                if (board.pieces(WHITE, PAWN) & squareBb(makeSquare(File(f), Rank(r))))
+                    shield++;
+            }
+        }
+        mgScore += shield * KING_SHIELD_BONUS;
+
+        // Open file penalty near king (when opponent has major pieces)
+        Bitboard enemyMajor = board.pieces(BLACK, QUEEN) | board.pieces(BLACK, ROOK);
+        if (enemyMajor) {
+            for (int f = fStart; f <= fEnd; f++) {
+                if (!(board.pieces(WHITE, PAWN) & fileBb(File(f))))
+                    mgScore -= KING_OPEN_FILE_PENALTY;
+            }
+        }
+    }
+
+    // Black king shield
+    Square bKing = board.kingSquare(BLACK);
+    {
+        int kf = fileOf(bKing);
+        int kr = rankOf(bKing);
+        int fStart = std::max(int(FILE_A), kf - 1);
+        int fEnd   = std::min(int(FILE_H), kf + 1);
+
+        int shield = 0;
+        int rStart = std::max(int(RANK_1), kr - 2);
+        int rEnd   = kr - 1;
+        for (int f = fStart; f <= fEnd; f++) {
+            for (int r = rStart; r <= rEnd; r++) {
+                if (board.pieces(BLACK, PAWN) & squareBb(makeSquare(File(f), Rank(r))))
+                    shield++;
+            }
+        }
+        mgScore -= shield * KING_SHIELD_BONUS;
+
+        // Open file penalty near king (when opponent has major pieces)
+        Bitboard enemyMajor = board.pieces(WHITE, QUEEN) | board.pieces(WHITE, ROOK);
+        if (enemyMajor) {
+            for (int f = fStart; f <= fEnd; f++) {
+                if (!(board.pieces(BLACK, PAWN) & fileBb(File(f))))
+                    mgScore += KING_OPEN_FILE_PENALTY;
+            }
+        }
+    }
+
+    // King safety is mainly a middlegame concern
+    return (mgScore * phase) / totalPhase;
+}
+
+int Eval::tempo(const Board& board) const {
+    return board.sideToMove() == WHITE ? TEMPO_BONUS : -TEMPO_BONUS;
 }
 
 int Eval::gamePhase(const Board& board) const {
@@ -201,7 +504,12 @@ int Eval::gamePhase(const Board& board) const {
 }
 
 int Eval::evaluate(const Board& board) const {
-    return material(board) + pieceSquare(board);
+    int phase = gamePhase(board);
+    if (phase > totalPhase) phase = totalPhase;
+    return material(board) + pieceSquare(board, phase) +
+           pawnStructure(board) + mobility(board, phase) +
+           bishopPair(board, phase) + rookOnFile(board, phase) +
+           kingSafety(board, phase) + tempo(board);
 }
 
 } // namespace chess

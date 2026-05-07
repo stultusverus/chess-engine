@@ -35,4 +35,5 @@
 - [x] Opening book support — Polyglot (.bin) format, `src/engine/book.h/cpp`, `--book` flag
 - [x] Book polish — fixed RNG seeding, bswap32, bulk-read, deduplicated probe logic, unit tests
 - [x] UCI position parser fix — moves after `position startpos` now correctly applied
-- [ ] Search evaluation improvements (king safety, pawn structure, mobility)
+- [x] Search evaluation improvements (king safety, pawn structure, mobility, bishop pair, rook files, tempo)
+- [x] Null move pruning (with zugzwang guard, mate-search guard)

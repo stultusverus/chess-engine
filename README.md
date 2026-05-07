@@ -11,8 +11,8 @@ src/
 │   ├── attacks.h/cpp     #   Magic bitboard attack tables (all piece types)
 │   ├── board.h/cpp       #   Bitboard board, FEN, make/unmake, Zobrist hash
 │   ├── movegen.h/cpp     #   Legal move generation (perft-verified)
-│   ├── eval.h/cpp        #   Tapered PeSTO evaluation (material + PST)
-│   ├── search.h/cpp      #   Alpha-beta PVS + iterative deepening + LMR
+│   ├── eval.h/cpp        #   Tapered PeSTO evaluation + pawn structure, mobility, bishop pair, rook files, king safety
+│   ├── search.h/cpp      #   Alpha-beta PVS + iterative deepening + LMR + null move pruning
 │   ├── tt.h/cpp          #   Transposition table (always-replace)
 │   ├── book.h/cpp        #   Polyglot opening book loader (.bin format)
 │   └── uci.h/cpp         #   UCI protocol handler
