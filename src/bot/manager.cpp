@@ -21,6 +21,70 @@ void Manager::setDebug(bool v) {
     client_.setDebug(v);
 }
 
+void Manager::challengeOpponent(const std::string& username, int clockLimit, int clockInc, bool rated) {
+    std::cerr << "Challenging " << username
+              << " (" << clockLimit << "+" << clockInc << (rated ? ", rated" : ", casual") << ")"
+              << std::endl;
+
+    json params;
+    params["clock.limit"] = clockLimit;
+    params["clock.increment"] = clockInc;
+    params["rated"] = rated;
+
+    json response = client_.createChallenge(username, params);
+    if (debug_) std::cerr << "[challenge] create response: " << response.dump() << std::endl;
+
+    if (response.contains("challenge") && response["challenge"].contains("id")) {
+        std::string challengeId = response["challenge"]["id"];
+        std::string status = response["challenge"].value("status", "");
+        std::cerr << "  Challenge " << challengeId << " status: " << status << std::endl;
+    } else if (response.contains("id")) {
+        std::string challengeId = response["id"];
+        std::string status = response.value("status", "");
+        std::cerr << "  Challenge " << challengeId << " status: " << status << std::endl;
+    } else {
+        std::cerr << "  Challenge response: " << response.dump() << std::endl;
+    }
+}
+
+void Manager::challengeBots(int count, int clockLimit, int clockInc, bool rated) {
+    if (clockLimit <= 0) clockLimit = 180;  // 3 minutes default
+    if (clockInc <= 0) clockInc = 2;         // 2 seconds default
+
+    std::cerr << "Fetching online bots..." << std::endl;
+    json bots = client_.getOnlineBots(50);
+    std::cerr << "  Found " << bots.size() << " online bots" << std::endl;
+
+    // Get our own ID
+    json account = client_.getAccount();
+    std::string selfId = account.value("id", "");
+
+    if (debug_) {
+        std::cerr << "[debug] Self ID: " << selfId << std::endl;
+        for (const auto& b : bots) {
+            std::cerr << "[debug]   Bot: " << b.value("id", "?")
+                      << " (" << b.value("username", "?") << ")" << std::endl;
+        }
+    }
+
+    int challenged = 0;
+    for (const auto& bot : bots) {
+        std::string botId = bot.value("id", "");
+        std::string botName = bot.value("username", "");
+
+        if (botId == selfId || botName.empty()) continue;
+
+        challengeOpponent(botName, clockLimit, clockInc, rated);
+        challenged++;
+
+        if (challenged >= count) break;
+    }
+
+    if (challenged == 0) {
+        std::cerr << "  No other bots online to challenge." << std::endl;
+    }
+}
+
 void Manager::run() {
     std::cerr << "Bot manager starting..." << std::endl;
     if (debug_) {

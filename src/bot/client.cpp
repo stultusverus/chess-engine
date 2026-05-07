@@ -130,6 +130,24 @@ json Client::getAccount() {
     return json::parse(resp);
 }
 
+json Client::getOnlineBots(int nb) {
+    std::string resp = get(baseUrl_ + "/api/bot/online?nb=" + std::to_string(nb));
+    if (resp.empty()) return json::array();
+
+    // NDJSON: parse each line as a separate JSON object
+    json result = json::array();
+    std::istringstream ss(resp);
+    std::string line;
+    while (std::getline(ss, line)) {
+        if (!line.empty()) {
+            try {
+                result.push_back(json::parse(line));
+            } catch (...) {}
+        }
+    }
+    return result;
+}
+
 json Client::acceptChallenge(const std::string& challengeId) {
     std::string resp = post(baseUrl_ + "/api/challenge/" + challengeId + "/accept");
     if (resp.empty()) return json::object();

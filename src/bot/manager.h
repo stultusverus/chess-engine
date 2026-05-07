@@ -18,6 +18,8 @@ public:
     ~Manager();
 
     void run();
+    void challengeOpponent(const std::string& username, int clockLimit, int clockInc, bool rated = false);
+    void challengeBots(int count = 1, int clockLimit = 0, int clockInc = 0, bool rated = false);
     void setDebug(bool v);
 
     // Challenge policy

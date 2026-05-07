@@ -23,6 +23,7 @@ public:
 
     // Account
     json getAccount();
+    json getOnlineBots(int nb = 100);
 
     // Challenges
     json acceptChallenge(const std::string& challengeId);
