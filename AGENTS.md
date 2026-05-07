@@ -10,6 +10,10 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ```
 
+Produces two executables:
+- `chess-engine` — UCI engine (stdin/stdout protocol)
+- `chess-bot` — Lichess bot (connects automatically, reads token from `.lichess.key`, `LICHESS_TOKEN` env, or `--token` flag)
+
 ## Test
 
 ```bash
@@ -46,3 +50,16 @@ clang-tidy src/**/*.cpp -- -std=c++17 -I src
 ## Project Goal
 
 A C++ chess engine that plays as a bot on Lichess.org via the Bot API. The engine core is built from scratch (bitboard representation, alpha-beta search, UCI protocol). A bot client layer handles the Lichess REST API and NDJSON streaming for event/game streams.
+
+## Bot Debugging
+
+```bash
+# Run bot with verbose output: HTTP requests, stream events, search info
+./build/chess-bot --debug
+
+# Challenge a specific bot
+./build/chess-bot --challenge SomeBotName
+
+# Challenge random online bots
+./build/chess-bot --challenge-bots 3
+```

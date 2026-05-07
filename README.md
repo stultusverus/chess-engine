@@ -1,33 +1,26 @@
-# Chess Engine
+# README.md
 
 A C++ chess engine built from scratch that plays as a bot on [Lichess.org](https://lichess.org) via the [Bot API](https://lichess.org/api#tag/Bot).
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────┐
-│               main.cpp                    │
-│        (config, signal handling)          │
-├──────────────────────────────────────────┤
-│           bot/                            │
-│  ┌────────┐ ┌────────┐ ┌──────────────┐  │
-│  │ client │ │ stream │ │   manager    │  │
-│  │ (HTTP) │ │(NDJSON)│ │(challenges,  │  │
-│  │        │ │        │ │ game routing)│  │
-│  └────────┘ └────────┘ └──────────────┘  │
-├──────────────────────────────────────────┤
-│          engine/                          │
-│  ┌──────┐ ┌───────┐ ┌──────┐ ┌────────┐ │
-│  │board │ │movegen│ │ eval │ │ search │ │
-│  └──────┘ └───────┘ └──────┘ └────────┘ │
-│  ┌──────┐ ┌───────┐                     │
-│  │  tt  │ │  uci  │                      │
-│  └──────┘ └───────┘                     │
-└──────────────────────────────────────────┘
+src/
+├── engine/               # Chess engine core
+│   ├── types.h/cpp       #   Square, Piece, Color, Move, Bitboard, helpers
+│   ├── attacks.h/cpp     #   Magic bitboard attack tables (all piece types)
+│   ├── board.h/cpp       #   Bitboard board, FEN, make/unmake, Zobrist hash
+│   ├── movegen.h/cpp     #   Legal move generation (perft-verified)
+│   ├── eval.h/cpp        #   Tapered PeSTO evaluation (material + PST)
+│   ├── search.h/cpp      #   Alpha-beta PVS + iterative deepening + LMR
+│   ├── tt.h/cpp          #   Transposition table (always-replace)
+│   └── uci.h/cpp         #   UCI protocol handler
+├── bot/                  # Lichess bot client
+│   ├── client.h/cpp      #   HTTP client (libcurl), NDJSON streaming, all API calls
+│   └── manager.h/cpp     #   Event loop, challenge policy, game orchestration
+├── main.cpp              #   UCI engine entry point
+└── bot_main.cpp          #   Bot entry point
 ```
-
-- **Engine core**: Bitboard board representation, magic bitboard move generation, alpha-beta search with iterative deepening, quiescence search, transposition table, UCI protocol.
-- **Bot client**: HTTP via libcurl, NDJSON event/game stream parsing, challenge filtering, concurrent game management.
 
 ## Dependencies
 
@@ -35,7 +28,7 @@ A C++ chess engine built from scratch that plays as a bot on [Lichess.org](https
 |---------|---------|---------|
 | CMake >= 3.16 | Build system | `brew install cmake` |
 | libcurl | HTTP requests | `brew install curl` |
-| nlohmann/json | JSON/NDJSON parsing | Header-only (vendored or `brew install nlohmann-json`) |
+| nlohmann/json | JSON/NDJSON parsing | auto-fetched by CMake |
 
 ## Quick Start
 
@@ -44,39 +37,40 @@ A C++ chess engine built from scratch that plays as a bot on [Lichess.org](https
 ```bash
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+make -j4
 ```
 
 ### 2. Get a Lichess Bot Token
 
 1. Create a Lichess account for your bot
 2. Go to https://lichess.org/account/oauth/token/create?scopes[]=bot:play
-3. Generate a token with the "Play bot moves" scope
-4. Upgrade the account to a bot: `curl -d '' https://lichess.org/api/bot/account/upgrade -H "Authorization: Bearer YOUR_TOKEN"`
+3. Generate a token with "Play bot moves" scope
+4. Upgrade to bot: `curl -d '' https://lichess.org/api/bot/account/upgrade -H "Authorization: Bearer TOKEN"`
+5. Save the token to `.lichess.key` in the project root
 
 ### 3. Run
 
 ```bash
-./build/chess-engine --token YOUR_LICHESS_TOKEN
+# As Lichess bot (reads token from .lichess.key, LICHESS_TOKEN env, or --token)
+./build/chess-bot
+
+# As UCI engine (for chess GUIs like CuteChess, Arena)
+./build/chess-engine
 ```
 
-The bot will appear online at https://lichess.org/player/bots and accept challenges matching its configured criteria.
+## Bot Configuration
 
-## Configuration
-
-Command-line options:
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--token` | Lichess API token (required) | — |
-| `--min-time` | Minimum clock seconds to accept | 60 |
-| `--max-time` | Maximum clock seconds to accept | 1800 |
-| `--min-increment` | Minimum increment to accept | 0 |
-| `--rated-only` | Only accept rated games | false |
-| `--resign-threshold` | Eval in centipawns to auto-resign | -800 |
-| `--draw-threshold` | Eval range for accepting draws | ±20 |
-| `--max-threads` | Search threads | 1 |
-| `--hash` | Transposition table size (MB) | 64 |
+```
+chess-bot [options]
+  --token TOKEN         Lichess API token (env: LICHESS_TOKEN, file: .lichess.key)
+  --debug               Verbose logging (HTTP requests, stream events, search info)
+  --challenge USER      Challenge a specific player then wait for the game
+  --challenge-bots N    Fetch online bots and challenge up to N of them
+  --rated-only          Only accept rated games
+  --min-time N          Minimum clock seconds to accept (default: 30)
+  --max-time N          Maximum clock seconds to accept (default: 1800)
+  --min-increment N     Minimum clock increment to accept (default: 0)
+```
 
 ## License
 
