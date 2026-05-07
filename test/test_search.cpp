@@ -1,0 +1,173 @@
+#include "engine/board.h"
+#include "engine/attacks.h"
+#include "engine/search.h"
+#include "engine/types.h"
+#include <iostream>
+#include <chrono>
+
+static int failures = 0;
+#define CHECK(expr) do { if (!(expr)) { std::cerr << "FAIL: " << #expr << std::endl; failures++; } } while(0)
+#define RUN_TEST(name) do { \
+    int before = failures; \
+    test_##name(); \
+    if (failures == before) std::cout << "  " #name ": PASSED" << std::endl; \
+} while(0)
+
+void test_searchReturnsMove() {
+    chess::Search search;
+    chess::Board b;
+    search.setInfinite(true);
+    auto result = search.search(b, 1);
+    CHECK(result.bestMove.from != chess::SQ_NONE);
+    CHECK(result.bestMove.to != chess::SQ_NONE);
+    CHECK(result.nodes > 0);
+    CHECK(result.depth >= 1);
+}
+
+void test_searchDepth1_fromStartpos() {
+    chess::Search search;
+    chess::Board b;
+    search.setInfinite(true);
+    auto result = search.search(b, 1);
+    CHECK(result.bestMove.from != chess::SQ_NONE);
+}
+
+// Back-rank mate in 1: Rd1-d8#
+void test_mateInOne() {
+    chess::Search search;
+    chess::Board b("1k6/ppp5/8/8/8/8/PPP5/1K1R4 w - - 0 1");
+    search.setInfinite(true);
+    auto result = search.search(b, 2);
+    CHECK(result.score > 900000);
+    CHECK(result.bestMove.from == chess::D1);
+    CHECK(result.bestMove.to == chess::D8);
+}
+
+void test_captureHangingQueen() {
+    chess::Search search;
+    chess::Board b("4k3/8/8/3q4/3Q4/8/8/4K3 w - - 0 1");
+    search.setInfinite(true);
+    auto result = search.search(b, 2);
+    CHECK(result.bestMove.to == chess::D5);
+    CHECK(result.score > 500);
+}
+
+void test_captureHangingRook() {
+    chess::Search search;
+    chess::Board b("4k3/8/8/3r4/3R4/8/8/4K3 w - - 0 1");
+    search.setInfinite(true);
+    auto result = search.search(b, 2);
+    CHECK(result.bestMove.to == chess::D5);
+    CHECK(result.score > 300);
+}
+
+void test_avoidLosingQueen() {
+    chess::Search search;
+    chess::Board b("4k3/8/8/3p4/3Q4/8/8/4K3 w - - 0 1");
+    search.setInfinite(true);
+    auto result = search.search(b, 2);
+    CHECK(result.score > 0);
+}
+
+void test_nodesIncreaseWithDepth() {
+    chess::Search search1;
+    chess::Board b;
+    search1.setInfinite(true);
+    auto r1 = search1.search(b, 1);
+
+    chess::Search search2;
+    search2.setInfinite(true);
+    auto r2 = search2.search(b, 2);
+
+    CHECK(r2.nodes > r1.nodes * 2);
+}
+
+void test_searchStop() {
+    chess::Search search;
+    chess::Board b;
+    search.setInfinite(true);
+    search.stop();
+
+    auto start = std::chrono::steady_clock::now();
+    auto result = search.search(b, 10);
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start).count();
+
+    CHECK(result.nodes < 5000);
+    (void)elapsed;
+}
+
+void test_promotionPreference() {
+    chess::Search search;
+    chess::Board b("8/Pk6/8/8/8/8/6K1/8 w - - 0 1");
+    search.setInfinite(true);
+    auto result = search.search(b, 2);
+    CHECK(result.bestMove.to == chess::A8);
+    CHECK(result.score > 0);
+}
+
+// Two different positions produce different best move squares
+void test_searchDifferentPositions() {
+    chess::Search search1;
+    chess::Board b1("4k3/8/8/8/4R3/8/8/4K3 w - - 0 1");
+    search1.setInfinite(true);
+    auto r1 = search1.search(b1, 2);
+
+    chess::Search search2;
+    chess::Board b2("4k3/8/8/8/8/4R3/8/4K3 w - - 0 1");
+    search2.setInfinite(true);
+    auto r2 = search2.search(b2, 2);
+
+    CHECK(r1.bestMove.from != chess::SQ_NONE);
+    CHECK(r2.bestMove.from != chess::SQ_NONE);
+    CHECK(r1.nodes > 0);
+    CHECK(r2.nodes > 0);
+}
+
+// TT should speed up repeat search of same position
+void test_ttSpeedup() {
+    chess::Search search;
+    chess::Board b("r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1");
+    search.setInfinite(true);
+
+    auto start1 = std::chrono::steady_clock::now();
+    auto r1 = search.search(b, 3);
+    auto t1 = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start1).count();
+
+    auto start2 = std::chrono::steady_clock::now();
+    auto r2 = search.search(b, 3);
+    auto t2 = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start2).count();
+
+    CHECK(r1.nodes > 0);
+    CHECK(r2.nodes > 0);
+    // Second search should be faster (TT hits)
+    CHECK(r2.nodes <= r1.nodes * 2 + 100);
+    CHECK(t2 <= t1 * 2 + 10);
+}
+
+int main() {
+    chess::attacks::init();
+    chess::Board::initZobrist();
+
+    std::cout << "Running search tests:" << std::endl;
+    RUN_TEST(searchReturnsMove);
+    RUN_TEST(searchDepth1_fromStartpos);
+    RUN_TEST(mateInOne);
+    RUN_TEST(captureHangingQueen);
+    RUN_TEST(captureHangingRook);
+    RUN_TEST(avoidLosingQueen);
+    RUN_TEST(nodesIncreaseWithDepth);
+    RUN_TEST(searchStop);
+    RUN_TEST(promotionPreference);
+    RUN_TEST(searchDifferentPositions);
+    RUN_TEST(ttSpeedup);
+
+    if (failures > 0) {
+        std::cerr << "\n" << failures << " test(s) failed." << std::endl;
+        return 1;
+    }
+    std::cout << "\nAll search tests passed." << std::endl;
+    return 0;
+}

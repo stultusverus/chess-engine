@@ -21,6 +21,8 @@
 - [x] `CMakeLists.txt` — Build system with auto-fetched dependencies
 - [x] `src/main.cpp` + `src/bot_main.cpp` — UCI and bot entry points
 - [x] `test/test_board.cpp` + `test/test_movegen.cpp` — Board + movegen unit tests. Perft suite
+- [x] `test/test_eval.cpp` — Evaluation tests (material, piece-square, game phase, constants)
+- [x] `test/test_search.cpp` — Search tests (mate detection, captures, promotions, TT, nodes, stop)
 - [x] End-to-end verified — bot plays complete games on Lichess vs Stockfish AI
 - [ ] Auto-resign when eval drops below threshold
 - [ ] Auto-accept/offer draw when eval is near zero

@@ -70,3 +70,11 @@ add_test(NAME board COMMAND test_board)
 add_executable(test_movegen test/test_movegen.cpp)
 target_link_libraries(test_movegen PRIVATE engine)
 add_test(NAME movegen COMMAND test_movegen)
+
+add_executable(test_eval test/test_eval.cpp)
+target_link_libraries(test_eval PRIVATE engine)
+add_test(NAME eval COMMAND test_eval)
+
+add_executable(test_search test/test_search.cpp)
+target_link_libraries(test_search PRIVATE engine)
+add_test(NAME search COMMAND test_search)
