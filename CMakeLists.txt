@@ -34,6 +34,8 @@ add_library(engine STATIC
     src/engine/search.cpp
     src/engine/tt.h
     src/engine/tt.cpp
+    src/engine/book.h
+    src/engine/book.cpp
     src/engine/uci.h
     src/engine/uci.cpp
 )

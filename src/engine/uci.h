@@ -3,6 +3,7 @@
 #include "types.h"
 #include "board.h"
 #include "search.h"
+#include "book.h"
 
 namespace chess {
 
@@ -22,6 +23,8 @@ private:
 
     Board board_;
     Search search_;
+    Book book_;
+    bool bookEnabled_ = false;
 };
 
 } // namespace chess

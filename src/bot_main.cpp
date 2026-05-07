@@ -21,6 +21,7 @@ static std::string readTokenFromFile() {
 int main(int argc, char* argv[]) {
     std::string token;
     std::string challengeUser;
+    std::string bookPath;
     int challengeBots = 0;
     bool ratedOnly = false;
     bool debug = false;
@@ -32,6 +33,8 @@ int main(int argc, char* argv[]) {
         std::string arg = argv[i];
         if (arg == "--token" && i + 1 < argc) {
             token = argv[++i];
+        } else if (arg == "--book" && i + 1 < argc) {
+            bookPath = argv[++i];
         } else if (arg == "--challenge" && i + 1 < argc) {
             challengeUser = argv[++i];
         } else if (arg == "--challenge-bots") {
@@ -63,6 +66,7 @@ int main(int argc, char* argv[]) {
     if (token.empty()) {
         std::cerr << "Usage: chess-bot --token <lichess_token> [options]" << std::endl;
         std::cerr << "  --token TOKEN       Lichess API token (env: LICHESS_TOKEN, file: .lichess.key)" << std::endl;
+        std::cerr << "  --book FILE         Path to Polyglot opening book (.bin)" << std::endl;
         std::cerr << "  --challenge USER    Challenge a specific player then wait for the game" << std::endl;
         std::cerr << "  --challenge-bots N  Challenge N online bots (default: 1)" << std::endl;
         std::cerr << "  --rated-only        Only accept rated challenges" << std::endl;
@@ -85,6 +89,11 @@ int main(int argc, char* argv[]) {
     manager.setMinTime(minTime);
     manager.setMaxTime(maxTime);
     manager.setMinIncrement(minInc);
+
+    if (!bookPath.empty()) {
+        std::cout << "  Opening book: " << bookPath << std::endl;
+        manager.setBookPath(bookPath);
+    }
 
     if (!challengeUser.empty()) {
         manager.challengeOpponent(challengeUser, minTime + 60, std::max(minInc, 2));

@@ -3,6 +3,7 @@
 #include "client.h"
 #include "engine/board.h"
 #include "engine/search.h"
+#include "engine/book.h"
 #include <iostream>
 #include <string>
 #include <thread>
@@ -27,6 +28,7 @@ public:
     void setMinTime(int s) { minTime_ = s; }
     void setMaxTime(int s) { maxTime_ = s; }
     void setMinIncrement(int s) { minInc_ = s; }
+    void setBookPath(const std::string& path);
 
 private:
     void onEvent(const json& ev);
@@ -39,6 +41,9 @@ private:
     Client client_;
     std::atomic<bool> running_{true};
     bool debug_ = false;
+
+    // Opening book
+    Book book_;
 
     // Shortcut for game-prefixed debug output
     void dbg(const std::string& gameId, const std::string& msg) const {

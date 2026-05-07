@@ -14,6 +14,7 @@ src/
 │   ├── eval.h/cpp        #   Tapered PeSTO evaluation (material + PST)
 │   ├── search.h/cpp      #   Alpha-beta PVS + iterative deepening + LMR
 │   ├── tt.h/cpp          #   Transposition table (always-replace)
+│   ├── book.h/cpp        #   Polyglot opening book loader (.bin format)
 │   └── uci.h/cpp         #   UCI protocol handler
 ├── bot/                  # Lichess bot client
 │   ├── client.h/cpp      #   HTTP client (libcurl), NDJSON streaming, all API calls
@@ -63,6 +64,7 @@ make -j4
 ```
 chess-bot [options]
   --token TOKEN         Lichess API token (env: LICHESS_TOKEN, file: .lichess.key)
+  --book FILE           Path to Polyglot opening book (.bin)
   --debug               Verbose logging (HTTP requests, stream events, search info)
   --challenge USER      Challenge a specific player then wait for the game
   --challenge-bots N    Fetch online bots and challenge up to N of them
@@ -70,6 +72,31 @@ chess-bot [options]
   --min-time N          Minimum clock seconds to accept (default: 30)
   --max-time N          Maximum clock seconds to accept (default: 1800)
   --min-increment N     Minimum clock increment to accept (default: 0)
+```
+
+## Opening Book
+
+The engine supports Polyglot (.bin) opening books. Place a `.bin` file in the `books/` directory and use the `--book` flag:
+
+```bash
+./build/chess-bot --token TOKEN --book books/gm2001.bin
+```
+
+For the UCI engine, use setoption:
+
+```
+setoption name OwnBook value true
+setoption name Book File value books/gm2001.bin
+```
+
+### Getting a Book
+
+Pre-built Polyglot books: https://github.com/michaeldv/polyglot_books
+
+Or generate from a PGN database:
+
+```bash
+polyglot make-book -pgn games.pgn -bin mybook.bin -max-ply 20
 ```
 
 ## License

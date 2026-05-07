@@ -62,4 +62,7 @@ A C++ chess engine that plays as a bot on Lichess.org via the Bot API. The engin
 
 # Challenge random online bots
 ./build/chess-bot --challenge-bots 3
+
+# Run bot with an opening book
+./build/chess-bot --book books/gm2001.bin --debug
 ```

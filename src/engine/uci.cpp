@@ -38,6 +38,8 @@ void UCI::handleUci() {
     std::cout << "id name ChessEngine" << std::endl;
     std::cout << "id author chess-engine" << std::endl;
     std::cout << "option name Hash type spin default 64 min 1 max 4096" << std::endl;
+    std::cout << "option name OwnBook type check default false" << std::endl;
+    std::cout << "option name Book File type string default <empty>" << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -58,7 +60,7 @@ void UCI::handlePosition(const std::string& line) {
     if (posType == "startpos") {
         board_.setFen(STARTPOS_FEN);
         std::string moves;
-        ss >> moves; // "moves"
+        ss >> moves; // consume "moves" keyword
     } else if (posType == "fen") {
         std::string fen;
         // Read 6 tokens: placement, stm, castle, ep, half, full
@@ -73,10 +75,6 @@ void UCI::handlePosition(const std::string& line) {
 
     // Parse moves
     std::string token;
-    ss >> token; // "moves" or already part of fen
-    if (token != "moves" && !token.empty()) {
-        // Re-read
-    }
     while (ss >> token) {
         if (token == "moves") continue;
         Square from = stringToSquare(token.substr(0, 2));
@@ -133,6 +131,16 @@ void UCI::handleGo(const std::string& line) {
 
     search_.setTimeMs(timeMs);
 
+    // Probe opening book
+    if (bookEnabled_ && book_.isLoaded()) {
+        auto bookMove = book_.probe(board_);
+        if (bookMove) {
+            std::cerr << "info string book move" << std::endl;
+            std::cout << "bestmove " << moveToString(*bookMove) << std::endl;
+            return;
+        }
+    }
+
     int maxDepth = depth > 0 ? depth : 64;
     SearchResult result = search_.search(board_, maxDepth);
 
@@ -149,18 +157,36 @@ void UCI::handleSetOption(const std::string& line) {
     ss >> cmd; // "setoption"
 
     std::string name, value;
+    bool readingName = false;
+    bool readingValue = false;
     while (ss >> token) {
         if (token == "name") {
-            while (ss >> token && token != "value")
-                name += (name.empty() ? "" : " ") + token;
+            readingName = true;
+            readingValue = false;
+            continue;
         }
         if (token == "value") {
-            ss >> value;
+            readingName = false;
+            readingValue = true;
+            continue;
+        }
+        if (readingName) {
+            if (!name.empty()) name += ' ';
+            name += token;
+        }
+        if (readingValue) {
+            value = token;
+            readingValue = false;
         }
     }
 
     if (name == "Hash") {
         search_.setTTSize(std::stoi(value));
+    } else if (name == "OwnBook") {
+        bookEnabled_ = (value == "true");
+    } else if (name == "Book File") {
+        if (!value.empty() && value != "<empty>")
+            book_.load(value);
     }
 }
 

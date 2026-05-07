@@ -9,6 +9,7 @@
 - [x] `src/engine/eval.h/cpp` — Tapered evaluation with PeSTO piece-square tables (MG/EG)
 - [x] `src/engine/search.h/cpp` — Alpha-beta with PVS, iterative deepening, quiescence, LMR, killer/history
 - [x] `src/engine/tt.h/cpp` — Transposition table (always-replace, 16B entries)
+- [x] `src/engine/book.h/cpp` — Polyglot opening book loader (.bin format, weighted random selection)
 - [x] `src/engine/uci.h/cpp` — UCI protocol (position, go, stop, setoption, time management)
 
 ## Phase 2 — Lichess Bot Client ✅
@@ -28,5 +29,7 @@
 - [ ] Auto-accept/offer draw when eval is near zero
 - [ ] Chat messages (GG on game end)
 - [ ] Move overrides (resign/draw commands from operator)
-- [ ] Opening book support
+- [x] Opening book support — Polyglot (.bin) format, `src/engine/book.h/cpp`, `--book` flag
 - [ ] Search evaluation improvements (king safety, pawn structure, mobility)
+- [ ] Book: fix RNG seeding (use `std::random_device`); fix `bswap32` to use builtin; bulk-read book file; deduplicate probe logic in manager.cpp; add book unit tests
+- [ ] Book: fix UCI position parser — moves after `startpos` were consumed but not applied on first token
