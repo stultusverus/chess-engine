@@ -123,6 +123,12 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         }
     }
 
+    if (depth >= 3 && ttMove.from == SQ_NONE) {
+        alphaBeta(board, depth - 2, alpha, beta, ply);
+        const TTEntry* newEntry = tt_.probe(hash);
+        if (newEntry) ttMove = tt_.unpackMove(newEntry->move);
+    }
+
     if (depth <= 0) return quiesce(board, alpha, beta, ply);
 
     // Null move pruning (skip when searching mate lines)
@@ -142,8 +148,11 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     MoveList moves;
     gen_.generateMoves(board, moves);
 
+    bool inCheck = board.isInCheck();
+    if (inCheck) depth++;
+
     if (moves.size() == 0) {
-        return board.isInCheck() ? -MATE + ply : 0;
+        return inCheck ? -MATE + ply : 0;
     }
 
     // Try TT move first
@@ -161,8 +170,21 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     int bestScore = -INF;
     int movesMade = 0;
     Move bestMoveInNode;
+    int staticEval = -INF;
 
     for (const Move& m : moves) {
+        // Futility pruning
+        if (depth <= 2 && !inCheck && movesMade >= 1 &&
+            m.type != CAPTURE && m.type != EN_PASSANT &&
+            m.type != PROMOTION && m.type != PROMOTION_CAPTURE) {
+            if (staticEval == -INF) {
+                staticEval = eval_.evaluate(board);
+                if (board.sideToMove() == BLACK) staticEval = -staticEval;
+            }
+            int margin = (depth == 1) ? 200 : 600;
+            if (staticEval + margin < alpha) continue;
+        }
+
         UndoInfo undo;
         if (!board.makeMove(m, undo)) continue;
 
@@ -234,27 +256,34 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
     }
 
     int standPat = eval_.evaluate(board);
+    if (board.sideToMove() == BLACK) standPat = -standPat;
     if (standPat >= beta) return beta;
     if (standPat > alpha) alpha = standPat;
 
+    bool inCheck = board.isInCheck();
+
     // Delta pruning: if even capturing the queen can't reach alpha, prune
     int delta = Eval::QUEEN_VALUE + 100;
-    if (standPat + delta < alpha && !board.isInCheck()) return alpha;
+    if (standPat + delta < alpha && !inCheck) return alpha;
 
     MoveList moves;
     gen_.generateMoves(board, moves);
 
-    MoveList captures;
-    for (const Move& m : moves) {
-        if (m.type == CAPTURE || m.type == EN_PASSANT || m.type == PROMOTION_CAPTURE)
-            captures.add(m);
-        else if (m.type == PROMOTION)
-            captures.add(m);
+    MoveList searchMoves;
+    if (inCheck) {
+        searchMoves = moves;
+    } else {
+        for (const Move& m : moves) {
+            if (m.type == CAPTURE || m.type == EN_PASSANT || m.type == PROMOTION_CAPTURE)
+                searchMoves.add(m);
+            else if (m.type == PROMOTION)
+                searchMoves.add(m);
+        }
     }
 
-    sortMoves(captures, board, ply);
+    sortMoves(searchMoves, board, ply);
 
-    for (const Move& m : captures) {
+    for (const Move& m : searchMoves) {
         // Static exchange evaluation (SEE): skip losing captures in qsearch
         if (m.type == CAPTURE) {
             PieceType victim = typeOf(board.pieceOn(m.to));

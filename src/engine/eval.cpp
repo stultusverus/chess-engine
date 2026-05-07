@@ -184,6 +184,11 @@ static constexpr int ROOK_SEMI_OPEN_FILE_EG = 15;
 
 static constexpr int KING_SHIELD_BONUS = 10;
 static constexpr int KING_OPEN_FILE_PENALTY = 15;
+static constexpr int KING_ATTACK_KNIGHT    = 2;
+static constexpr int KING_ATTACK_BISHOP    = 2;
+static constexpr int KING_ATTACK_ROOK      = 3;
+static constexpr int KING_ATTACK_QUEEN     = 5;
+static constexpr int KING_ATTACK_PROXIMITY = 2;
 static constexpr int TEMPO_BONUS = 15;
 
 int Eval::material(const Board& board) const {
@@ -428,7 +433,7 @@ int Eval::rookOnFile(const Board& board, int phase) const {
 int Eval::kingSafety(const Board& board, int phase) const {
     int mgScore = 0;
 
-    // White king shield
+    // White king shield + attack weight
     Square wKing = board.kingSquare(WHITE);
     {
         int kf = fileOf(wKing);
@@ -455,9 +460,43 @@ int Eval::kingSafety(const Board& board, int phase) const {
                     mgScore -= KING_OPEN_FILE_PENALTY;
             }
         }
+
+        // Attack units on king zone
+        {
+            Bitboard kingZone = attacks::kingAttacks(wKing) | squareBb(wKing);
+            Bitboard occ = board.occupied();
+            int attackUnits = 0;
+
+            Bitboard pieces = board.pieces(BLACK, KNIGHT);
+            while (pieces) {
+                if (attacks::knightAttacks(popLsb(pieces)) & kingZone)
+                    attackUnits += KING_ATTACK_KNIGHT;
+            }
+            pieces = board.pieces(BLACK, BISHOP);
+            while (pieces) {
+                if (attacks::bishopAttacks(popLsb(pieces), occ) & kingZone)
+                    attackUnits += KING_ATTACK_BISHOP;
+            }
+            pieces = board.pieces(BLACK, ROOK);
+            while (pieces) {
+                if (attacks::rookAttacks(popLsb(pieces), occ) & kingZone)
+                    attackUnits += KING_ATTACK_ROOK;
+            }
+            pieces = board.pieces(BLACK, QUEEN);
+            while (pieces) {
+                Square qsq = popLsb(pieces);
+                if (attacks::queenAttacks(qsq, occ) & kingZone)
+                    attackUnits += KING_ATTACK_QUEEN;
+                int dist = squareDistance(wKing, qsq);
+                if (dist < 5) attackUnits += (5 - dist) * KING_ATTACK_PROXIMITY;
+            }
+
+            if (attackUnits > 1)
+                mgScore -= (attackUnits * attackUnits) / 4;
+        }
     }
 
-    // Black king shield
+    // Black king shield + attack weight
     Square bKing = board.kingSquare(BLACK);
     {
         int kf = fileOf(bKing);
@@ -483,6 +522,40 @@ int Eval::kingSafety(const Board& board, int phase) const {
                 if (!(board.pieces(BLACK, PAWN) & fileBb(File(f))))
                     mgScore += KING_OPEN_FILE_PENALTY;
             }
+        }
+
+        // Attack units on king zone
+        {
+            Bitboard kingZone = attacks::kingAttacks(bKing) | squareBb(bKing);
+            Bitboard occ = board.occupied();
+            int attackUnits = 0;
+
+            Bitboard pieces = board.pieces(WHITE, KNIGHT);
+            while (pieces) {
+                if (attacks::knightAttacks(popLsb(pieces)) & kingZone)
+                    attackUnits += KING_ATTACK_KNIGHT;
+            }
+            pieces = board.pieces(WHITE, BISHOP);
+            while (pieces) {
+                if (attacks::bishopAttacks(popLsb(pieces), occ) & kingZone)
+                    attackUnits += KING_ATTACK_BISHOP;
+            }
+            pieces = board.pieces(WHITE, ROOK);
+            while (pieces) {
+                if (attacks::rookAttacks(popLsb(pieces), occ) & kingZone)
+                    attackUnits += KING_ATTACK_ROOK;
+            }
+            pieces = board.pieces(WHITE, QUEEN);
+            while (pieces) {
+                Square qsq = popLsb(pieces);
+                if (attacks::queenAttacks(qsq, occ) & kingZone)
+                    attackUnits += KING_ATTACK_QUEEN;
+                int dist = squareDistance(bKing, qsq);
+                if (dist < 5) attackUnits += (5 - dist) * KING_ATTACK_PROXIMITY;
+            }
+
+            if (attackUnits > 1)
+                mgScore += (attackUnits * attackUnits) / 4;
         }
     }
 
