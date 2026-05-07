@@ -65,4 +65,10 @@ A C++ chess engine that plays as a bot on Lichess.org via the Bot API. The engin
 
 # Run bot with an opening book
 ./build/chess-bot --book books/gm2001.bin --debug
+
+# Disable auto-resign/draw (useful for testing search strength)
+./build/chess-bot --no-resign --no-draw --debug
+
+# Custom resign threshold (resign only when losing 12+ pawns)
+./build/chess-bot --resign-threshold -1200
 ```

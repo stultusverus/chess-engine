@@ -18,7 +18,8 @@ src/
 │   └── uci.h/cpp         #   UCI protocol handler
 ├── bot/                  # Lichess bot client
 │   ├── client.h/cpp      #   HTTP client (libcurl), NDJSON streaming, all API calls
-│   └── manager.h/cpp     #   Event loop, challenge policy, game orchestration
+│   ├── manager.h/cpp     #   Event loop, challenge policy, game orchestration
+│   └── decision.h        #   Auto-resign/draw decision logic (pure, testable)
 ├── main.cpp              #   UCI engine entry point
 └── bot_main.cpp          #   Bot entry point
 ```
@@ -72,6 +73,10 @@ chess-bot [options]
   --min-time N          Minimum clock seconds to accept (default: 30)
   --max-time N          Maximum clock seconds to accept (default: 1800)
   --min-increment N     Minimum clock increment to accept (default: 0)
+  --no-resign           Disable auto-resign
+  --resign-threshold N  Resign eval threshold in centipawns (default: -800)
+  --no-draw             Disable auto-draw offer/accept
+  --draw-threshold N    Draw eval threshold in centipawns (default: 20)
 ```
 
 ## Opening Book

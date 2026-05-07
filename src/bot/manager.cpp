@@ -1,4 +1,5 @@
 #include "manager.h"
+#include "decision.h"
 #include "engine/attacks.h"
 #include <iostream>
 #include <thread>
@@ -10,10 +11,14 @@ namespace bot {
 Manager::Manager(const std::string& token) : client_(token) {
     chess::attacks::init();
     chess::Board::initZobrist();
+    workerThread_ = std::thread(&Manager::workerLoop, this);
 }
 
 Manager::~Manager() {
     running_ = false;
+    if (workerThread_.joinable()) {
+        workerThread_.join();
+    }
 }
 
 void Manager::setDebug(bool v) {
@@ -29,11 +34,77 @@ bool Manager::tryBookMove(const std::string& gameId, GameContext& ctx) {
     auto bookMove = book_.probe(ctx.board);
     if (bookMove) {
         dbg(gameId, "book move=" + moveToString(*bookMove));
-        client_.makeMove(gameId, moveToString(*bookMove));
+        std::string uci = moveToString(*bookMove);
+        enqueue([this, gameId, uci]() {
+            client_.makeMove(gameId, uci);
+        });
         ctx.ourTurn = false;
         return true;
     }
     return false;
+}
+
+bool Manager::maybeResignOrDraw(const std::string& gameId, GameContext& ctx, const chess::SearchResult& result) {
+    auto d = evaluatePostSearch(
+        ctx.drawOffered, ctx.consecutiveDrawishMoves, result.score,
+        autoResign_, resignThreshold_,
+        autoDraw_, drawEvalThreshold_, drawOfferMoves_);
+
+    ctx.consecutiveDrawishMoves = d.newConsecutiveDrawishMoves;
+
+    switch (d.action) {
+    case PostSearchAction::RESIGN:
+        std::cerr << "[" << gameId << "] Resigning (eval " << result.score
+                  << " < " << resignThreshold_ << ")" << std::endl;
+        enqueue([this, gameId]() {
+            client_.resignGame(gameId);
+        });
+        return true;
+    case PostSearchAction::ACCEPT_DRAW:
+        std::cerr << "[" << gameId << "] Accepting draw (eval " << result.score << ")" << std::endl;
+        ctx.drawOffered = false;
+        enqueue([this, gameId]() {
+            client_.handleDraw(gameId, true);
+        });
+        return true;
+    case PostSearchAction::OFFER_DRAW: {
+        std::string uci = moveToString(result.bestMove);
+        std::cerr << "[" << gameId << "] Offering draw (eval " << result.score
+                  << " within " << drawEvalThreshold_ << " cp for " << drawOfferMoves_ << " moves)" << std::endl;
+        enqueue([this, gameId, uci]() {
+            client_.makeMove(gameId, uci, true);
+        });
+        return false;
+    }
+    default:
+        enqueue([this, gameId, uci = moveToString(result.bestMove)]() {
+            client_.makeMove(gameId, uci, false);
+        });
+        return false;
+    }
+}
+
+void Manager::enqueue(std::function<void()> task) {
+    std::lock_guard<std::mutex> lock(actionMutex_);
+    actionQueue_.push_back(std::move(task));
+}
+
+void Manager::workerLoop() {
+    while (running_) {
+        std::function<void()> task;
+        {
+            std::lock_guard<std::mutex> lock(actionMutex_);
+            if (!actionQueue_.empty()) {
+                task = std::move(actionQueue_.front());
+                actionQueue_.pop_front();
+            }
+        }
+        if (task) {
+            task();
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
 }
 
 void Manager::challengeOpponent(const std::string& username, int clockLimit, int clockInc, bool rated) {
@@ -290,7 +361,7 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
             dbg(gameId, "bestmove=" + moveToString(result.bestMove) + " score=" + std::to_string(result.score)
                 + " depth=" + std::to_string(result.depth) + " nodes=" + std::to_string(result.nodes));
 
-            client_.makeMove(gameId, moveToString(result.bestMove));
+            if (maybeResignOrDraw(gameId, ctx, result)) return;
             ctx.ourTurn = false;
         }
 
@@ -320,10 +391,24 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
         if (state.contains("wtime")) ctx.wtime = state["wtime"];
         if (state.contains("btime")) ctx.btime = state["btime"];
 
+        // Detect opponent draw offer
+        if (state.contains("wdraw") || state.contains("bdraw")) {
+            bool opponentOffered = (ctx.color == "white" && state.value("bdraw", false))
+                                || (ctx.color == "black" && state.value("wdraw", false));
+            if (opponentOffered && !ctx.drawOffered) {
+                ctx.drawOffered = true;
+                std::cerr << "[" << gameId << "] Opponent offered draw" << std::endl;
+            }
+        }
+
         // Check if it's our turn
         Color stm = ctx.board.sideToMove();
         ctx.ourTurn = (ctx.color == "white" && stm == chess::WHITE)
                    || (ctx.color == "black" && stm == chess::BLACK);
+
+        if (!ctx.ourTurn) {
+            ctx.drawOffered = false;
+        }
 
         if (state.contains("status") && state["status"] != "started") {
             std::string status = state["status"];
@@ -350,7 +435,7 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
             dbg(gameId, "bestmove=" + moveToString(result.bestMove) + " score=" + std::to_string(result.score)
                 + " depth=" + std::to_string(result.depth) + " nodes=" + std::to_string(result.nodes));
 
-            client_.makeMove(gameId, moveToString(result.bestMove));
+            if (maybeResignOrDraw(gameId, ctx, result)) return;
             ctx.ourTurn = false;
         }
 

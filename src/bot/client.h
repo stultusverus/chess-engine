@@ -34,6 +34,7 @@ public:
     json makeMove(const std::string& gameId, const std::string& uciMove, bool drawOffer = false);
     json resignGame(const std::string& gameId);
     json abortGame(const std::string& gameId);
+    json handleDraw(const std::string& gameId, bool accept);
     json sendChat(const std::string& gameId, const std::string& room, const std::string& text);
     json claimVictory(const std::string& gameId);
 

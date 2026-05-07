@@ -84,3 +84,7 @@ add_test(NAME search COMMAND test_search)
 add_executable(test_book test/test_book.cpp)
 target_link_libraries(test_book PRIVATE engine)
 add_test(NAME book COMMAND test_book)
+
+add_executable(test_bot test/test_bot.cpp)
+target_link_libraries(test_bot PRIVATE engine)
+add_test(NAME bot COMMAND test_bot)

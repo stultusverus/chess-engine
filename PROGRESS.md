@@ -16,6 +16,7 @@
 
 - [x] `src/bot/client.h/cpp` — HTTP client (libcurl), NDJSON streaming, all Bot API endpoints (challenge, move, chat, abort, resign, draw)
 - [x] `src/bot/manager.h/cpp` — Global event loop, challenge filtering, concurrent game orchestration
+- [x] `src/bot/decision.h` — Pure decision logic for resign/draw (testable without HTTP/curl)
 
 ## Phase 3 — Full Bot Features
 
@@ -25,9 +26,10 @@
 - [x] `test/test_eval.cpp` — Evaluation tests (material, piece-square, game phase, constants)
 - [x] `test/test_search.cpp` — Search tests (mate detection, captures, promotions, TT, nodes, stop)
 - [x] `test/test_book.cpp` — Opening book tests (hash correctness, load/probe, decode, maxPly, weighted random)
+- [x] `test/test_bot.cpp` — Bot decision tests (resign, draw accept, draw offer, threshold logic)
 - [x] End-to-end verified — bot plays complete games on Lichess vs Stockfish AI
-- [ ] Auto-resign when eval drops below threshold
-- [ ] Auto-accept/offer draw when eval is near zero
+- [x] Auto-resign when eval drops below threshold
+- [x] Auto-accept/offer draw when eval is near zero
 - [ ] Chat messages (GG on game end)
 - [ ] Move overrides (resign/draw commands from operator)
 - [x] Opening book support — Polyglot (.bin) format, `src/engine/book.h/cpp`, `--book` flag

@@ -34,6 +34,8 @@ std::string Client::get(const std::string& url) {
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "chess-engine/1.0");
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+        curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
         curl_easy_perform(curl);
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
         curl_slist_free_all(headers);
@@ -56,7 +58,9 @@ std::string Client::post(const std::string& url, const std::string& data) {
     if (curl) {
         struct curl_slist* headers = nullptr;
         headers = curl_slist_append(headers, ("Authorization: Bearer " + token_).c_str());
-        headers = curl_slist_append(headers, "Content-Type: application/json");
+        if (!data.empty()) {
+            headers = curl_slist_append(headers, "Content-Type: application/json");
+        }
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.c_str());
@@ -64,8 +68,13 @@ std::string Client::post(const std::string& url, const std::string& data) {
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "chess-engine/1.0");
-        curl_easy_perform(curl);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+        curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+        CURLcode res = curl_easy_perform(curl);
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+        if (res != CURLE_OK) {
+            std::cerr << "[http] ERROR: " << curl_easy_strerror(res) << std::endl;
+        }
         curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
     }
@@ -179,13 +188,20 @@ json Client::makeMove(const std::string& gameId, const std::string& uciMove, boo
 json Client::resignGame(const std::string& gameId) {
     std::string resp = post(baseUrl_ + "/api/bot/game/" + gameId + "/resign");
     if (resp.empty()) return json::object();
-    return json::parse(resp);
+    try { return json::parse(resp); } catch (...) { return json::object(); }
 }
 
 json Client::abortGame(const std::string& gameId) {
     std::string resp = post(baseUrl_ + "/api/bot/game/" + gameId + "/abort");
     if (resp.empty()) return json::object();
     return json::parse(resp);
+}
+
+json Client::handleDraw(const std::string& gameId, bool accept) {
+    std::string action = accept ? "accept" : "decline";
+    std::string resp = post(baseUrl_ + "/api/bot/game/" + gameId + "/draw/" + action);
+    if (resp.empty()) return json::object();
+    try { return json::parse(resp); } catch (...) { return json::object(); }
 }
 
 json Client::sendChat(const std::string& gameId, const std::string& room, const std::string& text) {

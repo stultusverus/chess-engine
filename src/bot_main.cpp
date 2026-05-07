@@ -28,6 +28,10 @@ int main(int argc, char* argv[]) {
     int minTime = 30;
     int maxTime = 1800;
     int minInc = 0;
+    bool autoResign = true;
+    int resignThreshold = -800;
+    bool autoDraw = true;
+    int drawThreshold = 20;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -49,6 +53,14 @@ int main(int argc, char* argv[]) {
             maxTime = std::stoi(argv[++i]);
         } else if (arg == "--min-increment" && i + 1 < argc) {
             minInc = std::stoi(argv[++i]);
+        } else if (arg == "--no-resign") {
+            autoResign = false;
+        } else if (arg == "--resign-threshold" && i + 1 < argc) {
+            resignThreshold = std::stoi(argv[++i]);
+        } else if (arg == "--no-draw") {
+            autoDraw = false;
+        } else if (arg == "--draw-threshold" && i + 1 < argc) {
+            drawThreshold = std::stoi(argv[++i]);
         }
     }
 
@@ -74,6 +86,10 @@ int main(int argc, char* argv[]) {
         std::cerr << "  --min-time N        Minimum clock seconds (default: 30)" << std::endl;
         std::cerr << "  --max-time N        Maximum clock seconds (default: 1800)" << std::endl;
         std::cerr << "  --min-increment N   Minimum clock increment (default: 0)" << std::endl;
+        std::cerr << "  --no-resign         Disable auto-resign" << std::endl;
+        std::cerr << "  --resign-threshold N  Resign eval threshold in centipawns (default: -800)" << std::endl;
+        std::cerr << "  --no-draw           Disable auto-draw offer/accept" << std::endl;
+        std::cerr << "  --draw-threshold N  Draw eval threshold in centipawns (default: 20)" << std::endl;
         return 1;
     }
 
@@ -89,6 +105,10 @@ int main(int argc, char* argv[]) {
     manager.setMinTime(minTime);
     manager.setMaxTime(maxTime);
     manager.setMinIncrement(minInc);
+    manager.setAutoResign(autoResign);
+    manager.setResignThreshold(resignThreshold);
+    manager.setAutoDraw(autoDraw);
+    manager.setDrawThreshold(drawThreshold);
 
     if (!bookPath.empty()) {
         std::cout << "  Opening book: " << bookPath << std::endl;
