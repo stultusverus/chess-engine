@@ -229,6 +229,7 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
         // Parse initial FEN
         std::string fen = state.value("initialFen", std::string("startpos"));
         if (fen.empty() || fen == "startpos") fen = chess::STARTPOS_FEN;
+        ctx.initialFen = fen;
         ctx.board.setFen(fen);
 
         // Apply moves from initial state
@@ -277,9 +278,11 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
         }
 
     } else if (type == "gameState") {
-        // Update board with new moves
+        // Rebuild board from scratch using the full move list
+        // This is robust against partial sync (avoids illegal-move-on-already-played crashes)
         std::string moves = state.value("moves", "");
         if (!moves.empty()) {
+            ctx.board.setFen(ctx.initialFen);
             std::istringstream ss(moves);
             std::string uci;
             int appliedCount = 0;
@@ -290,10 +293,8 @@ void Manager::processGameState(const std::string& gameId, const json& state) {
                 if (uci.size() > 4) promo = charToPieceType(uci[4]);
                 Move m(from, to, promo);
                 chess::UndoInfo undo;
-                if (ctx.board.isMoveLegal(m)) {
-                    ctx.board.makeMove(m, undo);
-                    appliedCount++;
-                }
+                ctx.board.makeMove(m, undo);
+                appliedCount++;
             }
             dbg(gameId, "applied " + std::to_string(appliedCount) + " moves, FEN: " + ctx.board.fen());
         }

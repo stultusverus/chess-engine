@@ -57,6 +57,7 @@ private:
         Search search;
         std::string id;
         std::string color;
+        std::string initialFen;
         bool ourTurn = false;
         int wtime = 0;
         int btime = 0;
