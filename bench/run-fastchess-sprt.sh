@@ -17,6 +17,9 @@ draw="${DRAW:-movenumber=34 movecount=8 score=20}"
 resign="${RESIGN:-movecount=3 score=600}"
 pgnout="${PGNOUT:-${script_dir}/latest-vs-old.pgn}"
 configout="${CONFIGOUT:-${script_dir}/latest-vs-old-config.json}"
+startup_ms="${STARTUP_MS:-60000}"
+ucinewgame_ms="${UCINEWGAME_MS:-60000}"
+ping_ms="${PING_MS:-60000}"
 
 if command -v nproc >/dev/null 2>&1; then
     default_concurrency="$(nproc)"
@@ -54,6 +57,9 @@ cmd=(
     -draw ${draw}
     -resign ${resign}
     -concurrency "${concurrency}"
+    -startup-ms "${startup_ms}"
+    -ucinewgame-ms "${ucinewgame_ms}"
+    -ping-ms "${ping_ms}"
     -config "outname=${configout}"
     -pgnout "file=${pgnout}" "notation=san" "nodes=true" "append=false"
 )
