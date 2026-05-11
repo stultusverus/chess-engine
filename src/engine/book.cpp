@@ -2,6 +2,7 @@
 #include "board.h"
 #include "poly_keys.h"
 #include <algorithm>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <random>
