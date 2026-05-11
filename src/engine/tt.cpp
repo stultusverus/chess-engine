@@ -62,7 +62,9 @@ uint16_t TranspositionTable::packMove(Move m) {
     if (m.from == SQ_NONE) return 0;
     uint16_t packed = static_cast<uint16_t>(m.from & 63);
     packed |= static_cast<uint16_t>((m.to & 63) << 6);
-    packed |= static_cast<uint16_t>((m.promotion & 3) << 12); // 0=KNIGHT, 1=BISHOP, 2=ROOK, 3=QUEEN
+    if (m.promotion >= KNIGHT && m.promotion <= QUEEN) {
+        packed |= static_cast<uint16_t>(m.promotion << 12);
+    }
     return packed;
 }
 
@@ -70,7 +72,7 @@ Move TranspositionTable::unpackMove(uint16_t packed) {
     if (packed == 0) return Move();
     Square from = Square(packed & 63);
     Square to = Square((packed >> 6) & 63);
-    PieceType promo = PieceType((packed >> 12) & 3);
+    PieceType promo = PieceType((packed >> 12) & 7);
     if (promo >= KNIGHT && promo <= QUEEN)
         return Move(from, to, promo);
     return Move(from, to);

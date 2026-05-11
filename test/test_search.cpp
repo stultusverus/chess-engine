@@ -1,6 +1,7 @@
 #include "engine/board.h"
 #include "engine/attacks.h"
 #include "engine/search.h"
+#include "engine/tt.h"
 #include "engine/types.h"
 #include <iostream>
 #include <chrono>
@@ -30,6 +31,22 @@ void test_searchDepth1_fromStartpos() {
     search.setInfinite(true);
     auto result = search.search(b, 1);
     CHECK(result.bestMove.from != chess::SQ_NONE);
+}
+
+void test_ttMovePackingPromotion() {
+    chess::Move quiet(chess::E2, chess::E4);
+    chess::Move unpackedQuiet = chess::TranspositionTable::unpackMove(
+        chess::TranspositionTable::packMove(quiet));
+    CHECK(unpackedQuiet.from == chess::E2);
+    CHECK(unpackedQuiet.to == chess::E4);
+    CHECK(unpackedQuiet.promotion == chess::PIECE_TYPE_NB);
+
+    chess::Move queenPromo(chess::A7, chess::A8, chess::QUEEN);
+    chess::Move unpackedPromo = chess::TranspositionTable::unpackMove(
+        chess::TranspositionTable::packMove(queenPromo));
+    CHECK(unpackedPromo.from == chess::A7);
+    CHECK(unpackedPromo.to == chess::A8);
+    CHECK(unpackedPromo.promotion == chess::QUEEN);
 }
 
 // Back-rank mate in 1: Rd1-d8#
@@ -176,6 +193,7 @@ int main() {
     std::cout << "Running search tests:" << std::endl;
     RUN_TEST(searchReturnsMove);
     RUN_TEST(searchDepth1_fromStartpos);
+    RUN_TEST(ttMovePackingPromotion);
     RUN_TEST(mateInOne);
     RUN_TEST(captureHangingQueen);
     RUN_TEST(captureHangingRook);

@@ -42,6 +42,14 @@ void test_fenRoundtrip() {
     CHECK(fen1 == fen2);
 }
 
+void test_moveToStringPromotions() {
+    CHECK(chess::moveToString(chess::Move(chess::A7, chess::A8, chess::KNIGHT)) == "a7a8n");
+    CHECK(chess::moveToString(chess::Move(chess::A7, chess::A8, chess::BISHOP)) == "a7a8b");
+    CHECK(chess::moveToString(chess::Move(chess::A7, chess::A8, chess::ROOK)) == "a7a8r");
+    CHECK(chess::moveToString(chess::Move(chess::A7, chess::A8, chess::QUEEN)) == "a7a8q");
+    CHECK(chess::moveToString(chess::Move(chess::E2, chess::E4)) == "e2e4");
+}
+
 void test_setFenResetsState() {
     chess::Board b;
     chess::UndoInfo undo;
@@ -186,6 +194,7 @@ int main() {
     RUN_TEST(startPosition);
     RUN_TEST(fenParsing);
     RUN_TEST(fenRoundtrip);
+    RUN_TEST(moveToStringPromotions);
     RUN_TEST(setFenResetsState);
     RUN_TEST(makeMove_basic);
     RUN_TEST(makeMove_doublePush);

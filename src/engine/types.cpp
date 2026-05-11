@@ -19,9 +19,12 @@ Square stringToSquare(const std::string& s) {
 
 std::string moveToString(Move m) {
     std::string result = squareToString(m.from) + squareToString(m.to);
-    if (m.promotion != PIECE_TYPE_NB) {
-        const char promoChars[] = { 'n', 'b', 'r', 'q' };
-        result += promoChars[m.promotion];
+    switch (m.promotion) {
+    case KNIGHT: result += 'n'; break;
+    case BISHOP: result += 'b'; break;
+    case ROOK: result += 'r'; break;
+    case QUEEN: result += 'q'; break;
+    default: break;
     }
     return result;
 }
