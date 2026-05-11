@@ -114,7 +114,7 @@ engine:
   name: "chess-engine"
   working_dir: "${RUNTIME_DIR}/engine-workdir"
   protocol: "uci"
-  debug: true
+  debug: false
   ponder: false
 
   polyglot:
@@ -167,7 +167,7 @@ engine:
       enabled: false
       min_time: 20
       max_time: 10800
-      max_pieces: 8
+      max_pieces: 7
       source: "lichess"
       move_quality: "best"
 
@@ -186,14 +186,14 @@ engine:
       min_dtm_to_consider_as_wdl_1: 120
       move_quality: "best"
 
-  homemade_options:
+  homemade_options: {}
 
   uci_options:
-    Move Overhead: 100
+    Move Overhead: 0
     Hash: 512
     UCI_ShowWDL: true
 
-  silence_stderr: false
+  silence_stderr: true
 
 abort_time: 30
 fake_think_time: false
@@ -215,7 +215,7 @@ challenge:
   accept_bot: true
   only_bot: false
   max_increment: 20
-  min_increment: 0
+  min_increment: 1
   max_base: 1800
   min_base: 0
   max_days: .inf
@@ -232,7 +232,7 @@ challenge:
     - rated
   recent_bot_challenge_age: 3600
   max_recent_bot_challenges: 1
-  bullet_requires_increment: false
+  bullet_requires_increment: true
   max_simultaneous_games_per_user: 5
 
 greeting:
@@ -282,7 +282,7 @@ PY
 
 echo "==> Validating direct UCI engine startup"
 uci_output="$(
-    printf 'uci\nsetoption name Move Overhead value 100\nsetoption name Hash value 512\nsetoption name UCI_ShowWDL value true\nisready\nquit\n' \
+    printf 'uci\nsetoption name Move Overhead value 0\nsetoption name Hash value 512\nsetoption name UCI_ShowWDL value true\nisready\nquit\n' \
         | "${BUILD_DIR}/chess-engine"
 )"
 if [[ "${uci_output}" != *"uciok"* || "${uci_output}" != *"readyok"* ]]; then
