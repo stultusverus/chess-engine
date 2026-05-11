@@ -7,10 +7,11 @@
 - [x] `src/engine/board.h/cpp` — Bitboard representation, make/unmake move, FEN import/export, Zobrist hashing
 - [x] `src/engine/movegen.h/cpp` — Magic bitboard move generation, legal move filtering. Perft-verified
 - [x] `src/engine/eval.h/cpp` — Tapered evaluation with PeSTO piece-square tables (MG/EG)
-- [x] `src/engine/search.h/cpp` — Alpha-beta with PVS, iterative deepening, quiescence, LMR, killer/history
+- [x] `src/engine/search.h/cpp` — Alpha-beta with PVS, iterative deepening, quiescence, LMR, null move pruning (zugzwang guard), killer/history heuristic
 - [x] `src/engine/tt.h/cpp` — Transposition table (always-replace, 16B entries)
 - [x] `src/engine/book.h/cpp` — Polyglot opening book loader (.bin format, weighted random selection)
-- [x] `src/engine/uci.h/cpp` — UCI protocol (position, go, stop, setoption, time management)
+- [x] `src/engine/uci.h/cpp` — UCI protocol (position, go, stop, setoption, time management, WDL support)
+- [x] `src/engine/poly_keys.h` — Polyglot Zobrist key constants (header-only)
 
 ## Phase 2 — Lichess Bot Client ✅
 
@@ -35,5 +36,10 @@
 - [x] Opening book support — Polyglot (.bin) format, `src/engine/book.h/cpp`, `--book` flag
 - [x] Book polish — fixed RNG seeding, bswap32, bulk-read, deduplicated probe logic, unit tests
 - [x] UCI position parser fix — moves after `position startpos` now correctly applied
+- [x] Evaluation bug fix — corrected perspective issue causing flipped scores
 - [x] Search evaluation improvements (king safety, pawn structure, mobility, bishop pair, rook files, tempo)
-- [x] Null move pruning (with zugzwang guard, mate-search guard)
+- [x] Engine state and UCI stop handling fixed — correct board rebuild on `go`, thread-safe stop
+- [x] Promotion move serialization fix — underpromotions now correctly reported in UCI output
+- [x] UCI WDL support — `UCI_ShowWDL` option for Win/Draw/Loss probability output
+- [x] SPRT regression testing — fastchess bench with frozen `chess-engine-old` baseline (`bench/run-fastchess-sprt.sh`)
+- [x] Runtime deployment script — `scripts/setup-lichess-bot-runtime.sh` one-shot lichess-bot setup

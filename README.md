@@ -11,17 +11,18 @@ src/
 │   ├── attacks.h/cpp     #   Magic bitboard attack tables (all piece types)
 │   ├── board.h/cpp       #   Bitboard board, FEN, make/unmake, Zobrist hash
 │   ├── movegen.h/cpp     #   Legal move generation (perft-verified)
-│   ├── eval.h/cpp        #   Tapered PeSTO evaluation + pawn structure, mobility, bishop pair, rook files, king safety
-│   ├── search.h/cpp      #   Alpha-beta PVS + iterative deepening + LMR + null move pruning
-│   ├── tt.h/cpp          #   Transposition table (always-replace)
-│   ├── book.h/cpp        #   Polyglot opening book loader (.bin format)
-│   └── uci.h/cpp         #   UCI protocol handler
+│   ├── eval.h/cpp        #   Tapered PeSTO eval + pawn structure, mobility, bishop pair, rook files, king safety, tempo
+│   ├── search.h/cpp      #   Alpha-beta PVS + iterative deepening + LMR + null move pruning + killer/history heuristic
+│   ├── tt.h/cpp          #   Transposition table (always-replace, 16B entries)
+│   ├── book.h/cpp        #   Polyglot opening book loader (.bin format, weighted random selection)
+│   ├── uci.h/cpp         #   UCI protocol handler (WDL support, time management)
+│   └── poly_keys.h       #   Polyglot Zobrist key constants (header-only)
 ├── bot/                  # Lichess bot client
 │   ├── client.h/cpp      #   HTTP client (libcurl), NDJSON streaming, all API calls
-│   ├── manager.h/cpp     #   Event loop, challenge policy, game orchestration
+│   ├── manager.h/cpp     #   Event loop, challenge policy, concurrent game orchestration
 │   └── decision.h        #   Auto-resign/draw decision logic (pure, testable)
 ├── main.cpp              #   UCI engine entry point
-└── bot_main.cpp          #   Bot entry point
+└── bot_main.cpp          #   Bot entry point (CLI flags, token resolution)
 ```
 
 ## Dependencies
@@ -39,7 +40,7 @@ src/
 ```bash
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j4
+make -j$(sysctl -n hw.ncpu)  # Linux: use $(nproc)
 ```
 
 ### 2. Get a Lichess Bot Token
@@ -59,6 +60,16 @@ make -j4
 # As UCI engine (for chess GUIs like CuteChess, Arena)
 ./build/chess-engine
 ```
+
+## Runtime Deployment
+
+For a production Lichess bot deployment using [lichess-bot](https://github.com/lichess-bot-devs/lichess-bot), run the one-shot setup script:
+
+```bash
+./scripts/setup-lichess-bot-runtime.sh /path/to/deployment
+```
+
+This builds the engine, clones lichess-bot, creates a Python venv, writes a complete `config.yml`, and validates UCI startup. Supports environment overrides: `LICHESS_TOKEN`, `LICHESS_BOT_REPO`, `LICHESS_BOT_REF`, `PYTHON_BIN`, etc.
 
 ## Bot Configuration
 
@@ -103,6 +114,22 @@ Or generate from a PGN database:
 ```bash
 polyglot make-book -pgn games.pgn -bin mybook.bin -max-ply 20
 ```
+
+## Benchmarking (SPRT)
+
+SPRT (Sequential Probability Ratio Testing) regression tests compare the current build against a frozen baseline to detect strength regressions:
+
+```bash
+# Default: 10+0.1s time control, all CPU cores
+./bench/run-fastchess-sprt.sh
+
+# Custom parameters
+TC=5+0.05 ROUNDS=20000 CONCURRENCY=4 ./bench/run-fastchess-sprt.sh
+```
+
+Results are written to `bench/latest-vs-old.pgn` and `bench/latest-vs-old-config.json`.
+
+Environment variables: `TC`, `ROUNDS`, `GAMES`, `SPRT`, `CONCURRENCY`, `STARTUP_MS`, `UCINEWGAME_MS`.
 
 ## License
 
