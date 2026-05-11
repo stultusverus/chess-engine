@@ -5,16 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(nlohmann_json QUIET)
-if(NOT nlohmann_json_FOUND)
-    include(FetchContent)
-    FetchContent_Declare(json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG v3.11.3
-    )
-    FetchContent_MakeAvailable(json)
-endif()
-
 # Engine library
 add_library(engine STATIC
     src/engine/types.h
@@ -38,7 +28,6 @@ add_library(engine STATIC
 )
 
 target_include_directories(engine PUBLIC src)
-target_link_libraries(engine PUBLIC nlohmann_json::nlohmann_json)
 
 # UCI engine executable
 add_executable(chess-engine src/main.cpp)

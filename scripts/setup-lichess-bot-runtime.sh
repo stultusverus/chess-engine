@@ -115,10 +115,10 @@ engine:
   working_dir: "${RUNTIME_DIR}/engine-workdir"
   protocol: "uci"
   debug: true
-  ponder: true
+  ponder: false
 
   polyglot:
-    enabled: false
+    enabled: true
     book:
       standard:
         - "${BOOK_DST}"

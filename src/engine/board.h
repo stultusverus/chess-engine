@@ -16,7 +16,7 @@ public:
     explicit Board(const std::string& fen);
 
     // FEN
-    void setFen(const std::string& fen);
+    bool setFen(const std::string& fen);
     std::string fen() const;
 
     // Moves
@@ -49,6 +49,9 @@ public:
     // King square lookup
     Square kingSquare(Color c) const;
 
+    // Repetition detection
+    bool isRepetition() const;
+
     static void initZobrist();
 
 private:
@@ -62,6 +65,7 @@ private:
     int halfMoves_ = 0;
     int fullMoves_ = 1;
     uint64_t hash_ = 0;
+    std::vector<uint64_t> posHistory_;
 
     void putPiece(Piece p, Square s);
     void removePiece(Piece p, Square s);
@@ -76,6 +80,7 @@ struct UndoInfo {
     int oldHalfMoves;
     int oldFullMoves;
     uint64_t oldHash;
+    int oldHistorySize;
 };
 
 struct NullUndo {

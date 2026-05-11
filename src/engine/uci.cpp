@@ -66,8 +66,16 @@ Wdl approximateWdl(int score) {
 }
 
 void emitSearchInfo(const SearchResult& result, bool showWdl) {
-    std::cout << "info depth " << result.depth
-              << " score cp " << result.score;
+    std::cout << "info depth " << result.depth;
+
+    if (std::abs(result.score) > MATE - MAX_PLY) {
+        int plies = MATE - std::abs(result.score);
+        int mateIn = (plies + 1) / 2;
+        if (result.score < 0) mateIn = -mateIn;
+        std::cout << " score mate " << mateIn;
+    } else {
+        std::cout << " score cp " << result.score;
+    }
 
     if (showWdl) {
         Wdl wdl = approximateWdl(result.score);
@@ -153,7 +161,10 @@ void UCI::handlePosition(const std::string& line) {
             if (!fen.empty()) fen += ' ';
             fen += token;
         }
-        board_.setFen(fen);
+        if (!board_.setFen(fen)) {
+            std::cerr << "[uci] illegal fen: " << fen << std::endl;
+            return;
+        }
     }
 
     // Parse moves

@@ -66,10 +66,35 @@ Board::Board() {
 }
 
 Board::Board(const std::string& fen) {
-    setFen(fen);
+    if (!setFen(fen))
+        setFen(STARTPOS_FEN);
 }
 
-void Board::setFen(const std::string& fen) {
+bool Board::setFen(const std::string& fen) {
+    auto oldByPiece = byPiece_;
+    auto oldByColor = byColor_;
+    auto oldMailbox = mailbox_;
+    Color oldStm = stm_;
+    Square oldEp = ep_;
+    int oldCastle = castle_;
+    int oldHalfMoves = halfMoves_;
+    int oldFullMoves = fullMoves_;
+    uint64_t oldHash = hash_;
+    auto oldHistory = posHistory_;
+
+    auto restoreOldState = [&]() {
+        byPiece_ = oldByPiece;
+        byColor_ = oldByColor;
+        mailbox_ = oldMailbox;
+        stm_ = oldStm;
+        ep_ = oldEp;
+        castle_ = oldCastle;
+        halfMoves_ = oldHalfMoves;
+        fullMoves_ = oldFullMoves;
+        hash_ = oldHash;
+        posHistory_ = oldHistory;
+    };
+
     std::fill(byPiece_.begin(), byPiece_.end(), Bitboard(0));
     std::fill(byColor_.begin(), byColor_.end(), Bitboard(0));
     std::fill(mailbox_.begin(), mailbox_.end(), NO_PIECE);
@@ -149,6 +174,21 @@ void Board::setFen(const std::string& fen) {
     if (stm_ == BLACK) hash_ ^= zobristSide_;
     hash_ ^= zobristCastle_[castle_];
     if (ep_ != SQ_NONE) hash_ ^= zobristEp_[fileOf(ep_)];
+
+    // Validate: must have exactly one king per side
+    if (popcount(pieces(WHITE, KING)) != 1 || popcount(pieces(BLACK, KING)) != 1) {
+        restoreOldState();
+        return false;
+    }
+
+    // Validate: no pawns on first or last rank
+    if ((pieces(PAWN) & (0xFFULL | 0xFF00000000000000ULL)) != 0) {
+        restoreOldState();
+        return false;
+    }
+
+    posHistory_.clear();
+    return true;
 }
 
 std::string Board::fen() const {
@@ -212,6 +252,7 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
     undo.oldFullMoves = fullMoves_;
     undo.oldHash = hash_;
     undo.captured = NO_PIECE;
+    undo.oldHistorySize = static_cast<int>(posHistory_.size());
 
     if (move.from < A1 || move.from > H8 || move.to < A1 || move.to > H8)
         return false;
@@ -342,6 +383,7 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
         return false;
 
     undo.move = move;
+    posHistory_.push_back(hash_);
 
     // Remove piece from source
     removePiece(p, move.from);
@@ -419,7 +461,7 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
     // Check legality: after the move, is the moving side's king in check?
     // The side that just moved is `us`; opponent is now `stm_`
     Square kSq = kingSquare(us);
-    if (attacks::isSquareAttacked(*this, kSq, stm_)) {
+    if (kSq != SQ_NONE && attacks::isSquareAttacked(*this, kSq, stm_)) {
         unmakeMove(move, undo);
         return false;
     }
@@ -473,6 +515,7 @@ void Board::unmakeMove(Move /*move*/, const UndoInfo& undo) {
     }
 
     hash_ = undo.oldHash;
+    posHistory_.resize(undo.oldHistorySize);
 }
 
 void Board::makeNullMove(NullUndo& undo) {
@@ -505,7 +548,8 @@ bool Board::isMoveLegal(Move move) const {
 }
 
 bool Board::isInCheck() const {
-    return attacks::isSquareAttacked(*this, kingSquare(stm_), ~stm_);
+    Square kSq = kingSquare(stm_);
+    return kSq != SQ_NONE && attacks::isSquareAttacked(*this, kSq, ~stm_);
 }
 
 Piece Board::pieceOn(Square s) const { return mailbox_[s]; }
@@ -517,6 +561,17 @@ Bitboard Board::pieces(Color c, PieceType pt) const { return byPiece_[makePiece(
 Bitboard Board::occupied() const { return pieces(); }
 Bitboard Board::empty() const { return ~pieces(); }
 
-Square Board::kingSquare(Color c) const { return lsb(pieces(c, KING)); }
+Square Board::kingSquare(Color c) const {
+    Bitboard kings = pieces(c, KING);
+    return kings ? lsb(kings) : SQ_NONE;
+}
+
+bool Board::isRepetition() const {
+    int count = 0;
+    for (uint64_t h : posHistory_) {
+        if (h == hash_) count++;
+    }
+    return count >= 2;
+}
 
 } // namespace chess

@@ -70,6 +70,44 @@ void test_setFenResetsState() {
     CHECK(b.fen() == "4k3/8/8/8/8/8/8/4K3 w - - 12 34");
 }
 
+void test_invalidSetFenDoesNotMutateBoard() {
+    chess::Board b;
+    std::string start = b.fen();
+    uint64_t startHash = b.hash();
+
+    CHECK(!b.setFen("8/8/8/8/8/8/8/8 w - - 0 1"));
+    CHECK(b.fen() == start);
+    CHECK(b.hash() == startHash);
+    CHECK(!b.isRepetition());
+}
+
+void test_setFenClearsRepetitionHistory() {
+    chess::Board b;
+    chess::UndoInfo undo;
+
+    CHECK(b.makeMove(chess::Move(chess::G1, chess::F3), undo));
+    CHECK(b.makeMove(chess::Move(chess::G8, chess::F6), undo));
+    CHECK(b.makeMove(chess::Move(chess::F3, chess::G1), undo));
+    CHECK(b.makeMove(chess::Move(chess::F6, chess::G8), undo));
+    CHECK(b.makeMove(chess::Move(chess::G1, chess::F3), undo));
+    CHECK(b.makeMove(chess::Move(chess::G8, chess::F6), undo));
+    CHECK(b.makeMove(chess::Move(chess::F3, chess::G1), undo));
+    CHECK(b.makeMove(chess::Move(chess::F6, chess::G8), undo));
+    CHECK(b.isRepetition());
+
+    CHECK(b.setFen(chess::STARTPOS_FEN));
+    CHECK(!b.isRepetition());
+}
+
+void test_invalidMovesDoNotAffectRepetitionHistory() {
+    chess::Board b;
+    chess::UndoInfo undo;
+
+    CHECK(!b.makeMove(chess::Move(chess::E2, chess::E5), undo));
+    CHECK(!b.makeMove(chess::Move(chess::E2, chess::E5), undo));
+    CHECK(!b.isRepetition());
+}
+
 void test_makeMove_basic() {
     chess::Board b;
     chess::UndoInfo undo;
@@ -256,7 +294,7 @@ void test_malformedFenHandledSafely() {
     CHECK(badClocks.fullMoveNumber() == 1);
 
     chess::Board badPlacement("9/8/8/8/8/8/8/8 w - - 0 1");
-    CHECK(badPlacement.fen() == "8/8/8/8/8/8/8/8 w - - 0 1");
+    CHECK(badPlacement.fen() == chess::STARTPOS_FEN);
 }
 
 int main() {
@@ -270,6 +308,9 @@ int main() {
     RUN_TEST(moveToStringPromotions);
     RUN_TEST(stringToSquareRejectsInvalid);
     RUN_TEST(setFenResetsState);
+    RUN_TEST(invalidSetFenDoesNotMutateBoard);
+    RUN_TEST(setFenClearsRepetitionHistory);
+    RUN_TEST(invalidMovesDoNotAffectRepetitionHistory);
     RUN_TEST(makeMove_basic);
     RUN_TEST(makeMove_doublePush);
     RUN_TEST(makeMove_unmake);

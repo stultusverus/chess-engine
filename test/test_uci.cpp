@@ -149,6 +149,17 @@ void test_repetitionIsScoredAsDraw() {
     CHECK(scoreField(lastInfoLine(output)) == "score cp 0");
 }
 
+void test_invalidFenDoesNotReplaceCurrentPosition() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "position fen 8/8/8/8/8/8/8/8 w - - 0 1\n"
+        "go depth 1\n");
+
+    // Expected: the invalid FEN is rejected and the previous valid startpos remains active.
+    CHECK(contains(output, "[uci] illegal fen:"));
+    CHECK(!contains(output, "bestmove 0000"));
+}
+
 int main() {
     std::cout << "Running UCI tests:" << std::endl;
     RUN_TEST(rejectsInvalidCoordinates);
@@ -158,6 +169,7 @@ int main() {
     RUN_TEST(searchInfoEmittedOncePerCompletedGo);
     RUN_TEST(mateScoresUseUciMateFormat);
     RUN_TEST(repetitionIsScoredAsDraw);
+    RUN_TEST(invalidFenDoesNotReplaceCurrentPosition);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

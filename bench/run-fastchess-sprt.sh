@@ -43,6 +43,24 @@ if [[ ! -x "${old_engine}" ]]; then
     exit 1
 fi
 
+# Platform check: warn if the baseline binary was built for a different OS
+case "$(uname -s)" in
+    Darwin)
+        if file "${old_engine}" 2>/dev/null | grep -qi 'elf'; then
+            echo "error: ${old_engine} is a Linux ELF binary — it will not run on macOS." >&2
+            echo "       Build a macOS baseline with OLD_ENGINE=/path/to/mac-baseline or rebuild from a tagged commit." >&2
+            exit 1
+        fi
+        ;;
+    Linux)
+        if file "${old_engine}" 2>/dev/null | grep -qi 'mach-o'; then
+            echo "error: ${old_engine} is a macOS Mach-O binary — it will not run on Linux." >&2
+            echo "       Build a Linux baseline with OLD_ENGINE=/path/to/linux-baseline or rebuild from a tagged commit." >&2
+            exit 1
+        fi
+        ;;
+esac
+
 cp "${build_engine}" "${new_engine}"
 chmod +x "${new_engine}"
 

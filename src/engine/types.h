@@ -58,8 +58,8 @@ struct Move {
     MoveType type = NORMAL;
 
     Move() = default;
-    Move(Square from_, Square to_, PieceType promo = PIECE_TYPE_NB)
-        : from(from_), to(to_), promotion(promo), type(NORMAL) {}
+    Move(Square from_, Square to_, PieceType promo = PIECE_TYPE_NB, MoveType type_ = NORMAL)
+        : from(from_), to(to_), promotion(promo), type(type_) {}
 };
 
 // --- Castling ---

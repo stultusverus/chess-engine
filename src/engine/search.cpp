@@ -7,7 +7,6 @@
 namespace chess {
 
 static constexpr int INF = 1000000;
-static constexpr int MATE = INF - 100;
 
 Search::Search() {
     tt_.setSize(64);
@@ -72,16 +71,6 @@ SearchResult Search::search(const Board& board, int maxDepth) {
         result.depth = depth;
         result.bestMove = bestMoveRoot_;
 
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - startTime_).count();
-
-        std::cout << "info depth " << depth
-                  << " score cp " << result.score
-                  << " time " << elapsed
-                  << " nodes " << nodes_
-                  << " pv " << moveToString(result.bestMove)
-                  << std::endl;
-
         if (shouldStop()) {
             break;
         }
@@ -98,6 +87,10 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         nodesLimit_ += 1024;
         if (shouldStop()) return 0;
     }
+
+    // 50-move rule and repetition draw
+    if (board.halfMoveClock() >= 100 || board.isRepetition())
+        return 0;
 
     // TT probe
     uint64_t hash = board.hash();
@@ -261,16 +254,23 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
         if (shouldStop()) return 0;
     }
 
-    int standPat = eval_.evaluate(board);
-    if (board.sideToMove() == BLACK) standPat = -standPat;
-    if (standPat >= beta) return beta;
-    if (standPat > alpha) alpha = standPat;
+    // 50-move rule and repetition draw
+    if (board.halfMoveClock() >= 100 || board.isRepetition())
+        return 0;
 
     bool inCheck = board.isInCheck();
+    int standPat = 0;
 
-    // Delta pruning: if even capturing the queen can't reach alpha, prune
-    int delta = Eval::QUEEN_VALUE + 100;
-    if (standPat + delta < alpha && !inCheck) return alpha;
+    if (!inCheck) {
+        standPat = eval_.evaluate(board);
+        if (board.sideToMove() == BLACK) standPat = -standPat;
+        if (standPat >= beta) return beta;
+        if (standPat > alpha) alpha = standPat;
+
+        // Delta pruning: if even capturing the queen can't reach alpha, prune
+        int delta = Eval::QUEEN_VALUE + 100;
+        if (standPat + delta < alpha) return alpha;
+    }
 
     MoveList moves;
     gen_.generateMoves(board, moves);
@@ -287,11 +287,14 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
         }
     }
 
+    if (inCheck && searchMoves.size() == 0)
+        return -MATE + ply;
+
     sortMoves(searchMoves, board, ply);
 
     for (const Move& m : searchMoves) {
         // Static exchange evaluation (SEE): skip losing captures in qsearch
-        if (m.type == CAPTURE) {
+        if (m.type == CAPTURE && !inCheck) {
             PieceType victim = typeOf(board.pieceOn(m.to));
             PieceType attacker = typeOf(board.pieceOn(m.from));
             if (Eval::pieceValue(victim) < Eval::pieceValue(attacker) && standPat + Eval::pieceValue(victim) + 200 < alpha)

@@ -9,6 +9,8 @@
 
 namespace chess {
 
+constexpr int MATE = 999900;
+
 class Board;
 struct UndoInfo;
 

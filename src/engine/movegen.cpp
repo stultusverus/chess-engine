@@ -5,6 +5,8 @@
 namespace chess {
 
 void MoveGenerator::generateMoves(const Board& board, MoveList& moves) {
+    moves.clear();
+
     MoveList pseudo;
     generatePawnMoves(board, pseudo);
     generateKnightMoves(board, pseudo);
@@ -42,10 +44,10 @@ void MoveGenerator::generatePawnMoves(const Board& board, MoveList& moves) {
         if (empty & squareBb(fwd)) {
             bool promo = (rankOf(sq) == prePromo);
             if (promo) {
-                moves.add(Move(sq, fwd, QUEEN));
-                moves.add(Move(sq, fwd, ROOK));
-                moves.add(Move(sq, fwd, BISHOP));
-                moves.add(Move(sq, fwd, KNIGHT));
+                moves.add(Move(sq, fwd, QUEEN, PROMOTION));
+                moves.add(Move(sq, fwd, ROOK, PROMOTION));
+                moves.add(Move(sq, fwd, BISHOP, PROMOTION));
+                moves.add(Move(sq, fwd, KNIGHT, PROMOTION));
             } else {
                 moves.add(Move(sq, fwd));
             }
@@ -64,15 +66,15 @@ void MoveGenerator::generatePawnMoves(const Board& board, MoveList& moves) {
             bool promo = (rankOf(to) == promoRank);
             if (enemyPieces & squareBb(to)) {
                 if (promo) {
-                    moves.add(Move(sq, to, QUEEN));
-                    moves.add(Move(sq, to, ROOK));
-                    moves.add(Move(sq, to, BISHOP));
-                    moves.add(Move(sq, to, KNIGHT));
+                    moves.add(Move(sq, to, QUEEN, PROMOTION_CAPTURE));
+                    moves.add(Move(sq, to, ROOK, PROMOTION_CAPTURE));
+                    moves.add(Move(sq, to, BISHOP, PROMOTION_CAPTURE));
+                    moves.add(Move(sq, to, KNIGHT, PROMOTION_CAPTURE));
                 } else {
-                    moves.add(Move(sq, to));
+                    moves.add(Move(sq, to, PIECE_TYPE_NB, CAPTURE));
                 }
             } else if (to == ep) {
-                moves.add(Move(sq, to));
+                moves.add(Move(sq, to, PIECE_TYPE_NB, EN_PASSANT));
             }
         }
     }
@@ -80,61 +82,86 @@ void MoveGenerator::generatePawnMoves(const Board& board, MoveList& moves) {
 
 void MoveGenerator::generateKnightMoves(const Board& board, MoveList& moves) {
     Color us = board.sideToMove();
+    Color enemy = ~us;
     Bitboard knights = board.pieces(us, KNIGHT);
     Bitboard targets = ~board.pieces(us);
+    Bitboard enemyPieces = board.pieces(enemy);
 
     while (knights) {
         Square sq = popLsb(knights);
         Bitboard att = attacks::knightAttacks(sq) & targets;
-        while (att) moves.add(Move(sq, popLsb(att)));
+        while (att) {
+            Square to = popLsb(att);
+            moves.add(Move(sq, to, PIECE_TYPE_NB, (enemyPieces & squareBb(to)) ? CAPTURE : NORMAL));
+        }
     }
 }
 
 void MoveGenerator::generateBishopMoves(const Board& board, MoveList& moves) {
     Color us = board.sideToMove();
+    Color enemy = ~us;
     Bitboard bishops = board.pieces(us, BISHOP);
     Bitboard occ = board.occupied();
     Bitboard targets = ~board.pieces(us);
+    Bitboard enemyPieces = board.pieces(enemy);
 
     while (bishops) {
         Square sq = popLsb(bishops);
         Bitboard att = attacks::bishopAttacks(sq, occ) & targets;
-        while (att) moves.add(Move(sq, popLsb(att)));
+        while (att) {
+            Square to = popLsb(att);
+            moves.add(Move(sq, to, PIECE_TYPE_NB, (enemyPieces & squareBb(to)) ? CAPTURE : NORMAL));
+        }
     }
 }
 
 void MoveGenerator::generateRookMoves(const Board& board, MoveList& moves) {
     Color us = board.sideToMove();
+    Color enemy = ~us;
     Bitboard rooks = board.pieces(us, ROOK);
     Bitboard occ = board.occupied();
     Bitboard targets = ~board.pieces(us);
+    Bitboard enemyPieces = board.pieces(enemy);
 
     while (rooks) {
         Square sq = popLsb(rooks);
         Bitboard att = attacks::rookAttacks(sq, occ) & targets;
-        while (att) moves.add(Move(sq, popLsb(att)));
+        while (att) {
+            Square to = popLsb(att);
+            moves.add(Move(sq, to, PIECE_TYPE_NB, (enemyPieces & squareBb(to)) ? CAPTURE : NORMAL));
+        }
     }
 }
 
 void MoveGenerator::generateQueenMoves(const Board& board, MoveList& moves) {
     Color us = board.sideToMove();
+    Color enemy = ~us;
     Bitboard queens = board.pieces(us, QUEEN);
     Bitboard occ = board.occupied();
     Bitboard targets = ~board.pieces(us);
+    Bitboard enemyPieces = board.pieces(enemy);
 
     while (queens) {
         Square sq = popLsb(queens);
         Bitboard att = attacks::queenAttacks(sq, occ) & targets;
-        while (att) moves.add(Move(sq, popLsb(att)));
+        while (att) {
+            Square to = popLsb(att);
+            moves.add(Move(sq, to, PIECE_TYPE_NB, (enemyPieces & squareBb(to)) ? CAPTURE : NORMAL));
+        }
     }
 }
 
 void MoveGenerator::generateKingMoves(const Board& board, MoveList& moves) {
     Color us = board.sideToMove();
+    Color enemy = ~us;
     Square sq = board.kingSquare(us);
     Bitboard targets = ~board.pieces(us);
+    Bitboard enemyPieces = board.pieces(enemy);
     Bitboard att = attacks::kingAttacks(sq) & targets;
-    while (att) moves.add(Move(sq, popLsb(att)));
+    while (att) {
+        Square to = popLsb(att);
+        moves.add(Move(sq, to, PIECE_TYPE_NB, (enemyPieces & squareBb(to)) ? CAPTURE : NORMAL));
+    }
 }
 
 void MoveGenerator::generateCastlingMoves(const Board& board, MoveList& moves) {
@@ -151,7 +178,7 @@ void MoveGenerator::generateCastlingMoves(const Board& board, MoveList& moves) {
             if (!attacks::isSquareAttacked(board, E1, enemy) &&
                 !attacks::isSquareAttacked(board, F1, enemy) &&
                 !attacks::isSquareAttacked(board, G1, enemy)) {
-                moves.add(Move(E1, G1));
+                moves.add(Move(E1, G1, PIECE_TYPE_NB, CASTLING));
             }
         }
         if ((cr & WQ) && board.pieceOn(E1) == W_KING && board.pieceOn(A1) == W_ROOK &&
@@ -159,7 +186,7 @@ void MoveGenerator::generateCastlingMoves(const Board& board, MoveList& moves) {
             if (!attacks::isSquareAttacked(board, E1, enemy) &&
                 !attacks::isSquareAttacked(board, D1, enemy) &&
                 !attacks::isSquareAttacked(board, C1, enemy)) {
-                moves.add(Move(E1, C1));
+                moves.add(Move(E1, C1, PIECE_TYPE_NB, CASTLING));
             }
         }
     } else {
@@ -168,7 +195,7 @@ void MoveGenerator::generateCastlingMoves(const Board& board, MoveList& moves) {
             if (!attacks::isSquareAttacked(board, E8, enemy) &&
                 !attacks::isSquareAttacked(board, F8, enemy) &&
                 !attacks::isSquareAttacked(board, G8, enemy)) {
-                moves.add(Move(E8, G8));
+                moves.add(Move(E8, G8, PIECE_TYPE_NB, CASTLING));
             }
         }
         if ((cr & BQ) && board.pieceOn(E8) == B_KING && board.pieceOn(A8) == B_ROOK &&
@@ -176,7 +203,7 @@ void MoveGenerator::generateCastlingMoves(const Board& board, MoveList& moves) {
             if (!attacks::isSquareAttacked(board, E8, enemy) &&
                 !attacks::isSquareAttacked(board, D8, enemy) &&
                 !attacks::isSquareAttacked(board, C8, enemy)) {
-                moves.add(Move(E8, C8));
+                moves.add(Move(E8, C8, PIECE_TYPE_NB, CASTLING));
             }
         }
     }
