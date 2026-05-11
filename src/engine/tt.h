@@ -16,11 +16,10 @@ enum class Bound : uint8_t {
 #pragma pack(push, 1)
 struct TTEntry {
     uint64_t hash;
-    int16_t score;
+    int32_t score;
     int8_t depth;
     uint8_t bound;
     uint16_t move; // packed: from | (to << 6) | (promotion << 12)
-    uint16_t padding;
 };
 #pragma pack(pop)
 
@@ -37,7 +36,7 @@ public:
     const TTEntry* probe(uint64_t hash) const;
 
     // Store entry (always replace)
-    void store(uint64_t hash, int16_t score, int8_t depth, Bound bound, Move move);
+    void store(uint64_t hash, int score, int8_t depth, Bound bound, Move move);
 
     // Pack/Unpack move
     static uint16_t packMove(Move m);

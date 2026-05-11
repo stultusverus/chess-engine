@@ -73,6 +73,16 @@ Move Book::decodePolyglotMove(uint16_t packed) {
     return Move(from, to, pt);
 }
 
+static Move fixupPolyglotMove(Move m) {
+    // Polyglot encodes castling as king-to-rook (e1h1, e1a1, e8h8, e8a8)
+    // UCI uses king destination (e1g1, e1c1, e8g8, e8c8)
+    if (m.from == E1 && m.to == H1) return Move(E1, G1);
+    if (m.from == E1 && m.to == A1) return Move(E1, C1);
+    if (m.from == E8 && m.to == H8) return Move(E8, G8);
+    if (m.from == E8 && m.to == A8) return Move(E8, C8);
+    return m;
+}
+
 static uint64_t bswap64(uint64_t x) {
     return __builtin_bswap64(x);
 }
@@ -184,11 +194,11 @@ std::optional<Move> Book::probe(const Board& board) const {
     for (const auto* e : matches) {
         cumulative += e->weight;
         if (r < cumulative)
-            return decodePolyglotMove(e->move);
+            return fixupPolyglotMove(decodePolyglotMove(e->move));
     }
 
     // Fallback (shouldn't reach here)
-    return decodePolyglotMove(matches.back()->move);
+    return fixupPolyglotMove(decodePolyglotMove(matches.back()->move));
 }
 
 } // namespace chess

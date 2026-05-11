@@ -168,7 +168,10 @@ void UCI::handlePosition(const std::string& line) {
 
         Move m(from, to, promo);
         UndoInfo undo;
-        board_.makeMove(m, undo);
+        if (!board_.makeMove(m, undo)) {
+            std::cerr << "[uci] illegal move: " << token << std::endl;
+            break;
+        }
     }
 }
 

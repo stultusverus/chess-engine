@@ -1,6 +1,9 @@
 #include "board.h"
 #include "attacks.h"
 #include <algorithm>
+#include <cerrno>
+#include <climits>
+#include <cstdlib>
 #include <sstream>
 #include <string>
 #include <cctype>
@@ -9,6 +12,16 @@ namespace chess {
 
 // --- Zobrist keys ---
 namespace {
+    int safeParseInt(const std::string& s, int defaultVal) {
+        if (s.empty()) return defaultVal;
+        char* end = nullptr;
+        errno = 0;
+        long v = std::strtol(s.c_str(), &end, 10);
+        if (errno != 0 || end == s.c_str() || *end != '\0') return defaultVal;
+        if (v < INT_MIN || v > INT_MAX) return defaultVal;
+        return static_cast<int>(v);
+    }
+
     uint64_t zobristPieces_[PIECE_NB][64];
     uint64_t zobristCastle_[16];
     uint64_t zobristEp_[8];
@@ -111,15 +124,15 @@ void Board::setFen(const std::string& fen) {
     if (castle.find('q') != std::string::npos) castle_ |= BQ;
 
     // En passant
-    if (ep != "-") {
+    if (ep != "-" && ep.size() >= 2 && ep[0] >= 'a' && ep[0] <= 'h' && ep[1] >= '1' && ep[1] <= '8') {
         File f = File(ep[0] - 'a');
         Rank r = Rank(ep[1] - '1');
         ep_ = makeSquare(f, r);
     }
 
     // Clocks
-    halfMoves_ = half.empty() ? 0 : std::stoi(half);
-    fullMoves_ = full.empty() ? 1 : std::stoi(full);
+    halfMoves_ = safeParseInt(half, 0);
+    fullMoves_ = safeParseInt(full, 1);
 
     // Build hash
     hash_ = 0;
@@ -262,6 +275,10 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
             }
         }
     }
+
+    // Reject friendly-piece captures
+    if (mailbox_[move.to] != NO_PIECE && colorOf(mailbox_[move.to]) == us)
+        return false;
 
     undo.move = move;
 

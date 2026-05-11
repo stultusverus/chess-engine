@@ -2,7 +2,6 @@
 #include "board.h"
 #include <algorithm>
 #include <chrono>
-#include <fstream>
 #include <iostream>
 
 namespace chess {
@@ -11,6 +10,7 @@ static constexpr int INF = 1000000;
 static constexpr int MATE = INF - 100;
 
 Search::Search() {
+    tt_.setSize(64);
     ageHistory();
 }
 
@@ -75,13 +75,12 @@ SearchResult Search::search(const Board& board, int maxDepth) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - startTime_).count();
 
-        static std::ofstream logFile("engine.err", std::ios::app);
-        logFile << "info depth " << depth
-                << " score cp " << result.score
-                << " time " << elapsed
-                << " nodes " << nodes_
-                << " pv " << moveToString(result.bestMove)
-                << std::endl;
+        std::cout << "info depth " << depth
+                  << " score cp " << result.score
+                  << " time " << elapsed
+                  << " nodes " << nodes_
+                  << " pv " << moveToString(result.bestMove)
+                  << std::endl;
 
         if (shouldStop()) {
             break;
@@ -116,10 +115,14 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         else if (ttScore < -MATE + MAX_PLY) ttScore += ply;
 
         if (depth > 0 && ttEntry->depth >= depth) {
-            if (ttEntry->bound == static_cast<uint8_t>(Bound::EXACT))
+            if (ttEntry->bound == static_cast<uint8_t>(Bound::EXACT)) {
+                if (ply == 0 && ttMove.from != SQ_NONE) bestMoveRoot_ = ttMove;
                 return ttScore;
-            if (ttEntry->bound == static_cast<uint8_t>(Bound::LOWER) && ttScore >= beta)
+            }
+            if (ttEntry->bound == static_cast<uint8_t>(Bound::LOWER) && ttScore >= beta) {
+                if (ply == 0 && ttMove.from != SQ_NONE) bestMoveRoot_ = ttMove;
                 return ttScore;
+            }
             if (ttEntry->bound == static_cast<uint8_t>(Bound::UPPER) && ttScore <= alpha)
                 return ttScore;
         }
@@ -244,7 +247,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         if (ttStoreScore > MATE - MAX_PLY) ttStoreScore += ply;
         else if (ttStoreScore < -MATE + MAX_PLY) ttStoreScore -= ply;
 
-        tt_.store(hash, static_cast<int16_t>(ttStoreScore), static_cast<int8_t>(depth), b, bestMoveInNode);
+        tt_.store(hash, ttStoreScore, static_cast<int8_t>(depth), b, bestMoveInNode);
     }
 
     return bestScore;

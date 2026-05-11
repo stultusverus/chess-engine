@@ -32,7 +32,7 @@ const TTEntry* TranspositionTable::probe(uint64_t hash) const {
     return nullptr;
 }
 
-void TranspositionTable::store(uint64_t hash, int16_t score, int8_t depth, Bound bound, Move move) {
+void TranspositionTable::store(uint64_t hash, int score, int8_t depth, Bound bound, Move move) {
     if (entries_.empty()) return;
 
     size_t idx = hash & (entries_.size() - 1);

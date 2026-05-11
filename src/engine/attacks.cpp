@@ -8,13 +8,6 @@ namespace attacks {
 
 namespace {
 
-uint64_t prng(uint64_t& state) {
-    state ^= state >> 12;
-    state ^= state << 25;
-    state ^= state >> 27;
-    return state * 0x2545F4914F6CDD1DULL;
-}
-
 // Tables
 std::array<Bitboard, 64> bishopMasks_;
 std::array<Bitboard, 64> rookMasks_;
@@ -106,80 +99,79 @@ Bitboard sliderAttacksOTF(Square sq, Bitboard occupied, bool bishop) {
     return attacks;
 }
 
-// Magic number search for bishop
-void findBishopMagic(Square sq) {
-    Bitboard& mask = bishopMasks_[sq];
-    Bitboard& magic = bishopMagics_[sq];
+// Known-good magic numbers (precomputed, avoid ~8.5s brute-force search at startup)
+constexpr uint64_t bishopMagicsKnown[64] = {
+    0x1044080881021200, 0x2104902028110,    0x634010a02000000,  0x68c041181100002,
+    0x11104000401930,   0x10c1901008800062,  0x88020804140e0000, 0x4c8410250100c09,
+    0x200410405022204,  0x1200281004008030,  0x40802004081,      0x10100410d2001200,
+    0x1002140420200420, 0x4209810460150180,  0x8030008088205200, 0x400408544422040,
+    0x8000519500c00,    0x104001001022c00,   0x83000380a40c088,  0x824002022408020,
+    0x802020400a22204,  0x1004400201102100,  0x1001413212500400, 0x3010802200a40548,
+    0x210080010021002,  0xa04200804018400,   0x1090b0020e040044, 0x808248020002,
+    0x844082024002019,  0x48004122034608,    0x800820484020281,  0x4404008000208400,
+    0x4104000840c10,    0x445108000c1008,    0x341000020480,     0x2008c008200a0200,
+    0x5040104010810100, 0x4080021020080,     0x81040c00f10120,   0x800820484020281,
+    0x86882030000814,   0xa2080305009820,    0x8081004028841000, 0xe800002018024100,
+    0x490881050104500,  0x8020020200ca0200,  0x2104902028110,    0xa2080305009820,
+    0x88020804140e0000, 0x230c0101080042,    0x50401540008,      0x100000142120000,
+    0x600001b04a060000, 0x30900210410200,    0x32505000808052,   0x2104902028110,
+    0x4c8410250100c09,  0x400408544422040,   0xc861580480840,    0x4000020000208803,
+    0x8210000012020200, 0x684084010020094,   0x200410405022204,  0x1044080881021200,
+};
+
+constexpr uint64_t rookMagicsKnown[64] = {
+    0x880002010804000,  0x2040100040002000,  0x4080200080100009, 0x1180080010008482,
+    0x1280021400080180, 0x200100844410200,   0x3100010002001094, 0x100042090460100,
+    0x8008c0022180,     0x40802000804014,    0x21802001801000,   0x808010000800,
+    0x1000411000802,    0x60a001850040600,   0xc003402108138,    0x20a0800041000880,
+    0x2040018000403184, 0x2000400a300240,    0x6800820040201600, 0x808010000800,
+    0x4008080040800,    0xa620808004000200,  0x2001240001169008, 0x8302000040a401,
+    0x240400880088020,  0x401c00740201000,   0x400200180100081,  0x10004240080400,
+    0x4008080040800,    0x4000480800200,     0x280020080800100,  0x8010030e00208044,
+    0x2204000818000e8,  0x6701002082004200,  0x104101002000,     0xa004016000820,
+    0x1c10040080800800, 0x800401800200,      0x2800200804100,    0x6040440066000481,
+    0x1008840002d8000,  0x50002001c24008,    0x24080c422060010,  0x8002004010220008,
+    0x2082080004008080, 0x12000400090100,    0x401020004010100,  0x210284500820004,
+    0x1000400038800480, 0x6701002082004200,  0x2020042015004100, 0x10004901209100,
+    0x8004000800800480, 0x2003808400220080,  0x408002d001080400, 0x840d000882004100,
+    0x40008003006013c1, 0xc844001082011,     0x810084011002001,  0x5008081001050021,
+    0x92000804211002,   0x82001008844102,    0x222480208b00104,  0x12481140442,
+};
+
+static void buildBishopTable(Square sq, uint64_t magic) {
+    Bitboard mask = bishopMasks_[sq];
     auto& table = bishopTable_[sq];
 
     int bits = popcount(mask);
     int count = 1 << bits;
-    std::vector<Bitboard> occupancies(count);
-    std::vector<Bitboard> attacks(count);
+    int shift = 64 - bits;
+    std::fill(table.begin(), table.begin() + 512, Bitboard(0));
 
     Bitboard subset = 0;
     for (int i = 0; i < count; i++) {
-        occupancies[i] = subset;
-        attacks[i] = sliderAttacksOTF(sq, subset, true);
+        Bitboard att = sliderAttacksOTF(sq, subset, true);
+        int idx = int((subset * magic) >> shift);
+        table[idx] = att;
         subset = (subset - mask) & mask;
     }
-
-    uint64_t seed = bits;
-    int shift = 64 - bits;
-    for (int attempt = 0; attempt < 10000000; attempt++) {
-        uint64_t m = prng(seed) & prng(seed) & prng(seed);
-        if (popcount((m * mask) >> 56) < bits / 2) continue;
-
-        std::fill(table.begin(), table.begin() + 512, Bitboard(0));
-        bool ok = true;
-        for (int i = 0; i < count && ok; i++) {
-            int idx = int((occupancies[i] * m) >> shift);
-            if (table[idx] == 0)
-                table[idx] = attacks[i];
-            else if (table[idx] != attacks[i])
-                ok = false;
-        }
-        if (ok) { magic = m; return; }
-    }
-    magic = 0;
 }
 
-// Magic number search for rook
-void findRookMagic(Square sq) {
-    Bitboard& mask = rookMasks_[sq];
-    Bitboard& magic = rookMagics_[sq];
+static void buildRookTable(Square sq, uint64_t magic) {
+    Bitboard mask = rookMasks_[sq];
     auto& table = rookTable_[sq];
 
     int bits = popcount(mask);
     int count = 1 << bits;
-    std::vector<Bitboard> occupancies(count);
-    std::vector<Bitboard> attacks(count);
+    int shift = 64 - bits;
+    std::fill(table.begin(), table.begin() + 4096, Bitboard(0));
 
     Bitboard subset = 0;
     for (int i = 0; i < count; i++) {
-        occupancies[i] = subset;
-        attacks[i] = sliderAttacksOTF(sq, subset, false);
+        Bitboard att = sliderAttacksOTF(sq, subset, false);
+        int idx = int((subset * magic) >> shift);
+        table[idx] = att;
         subset = (subset - mask) & mask;
     }
-
-    uint64_t seed = bits + 32;
-    int shift = 64 - bits;
-    for (int attempt = 0; attempt < 10000000; attempt++) {
-        uint64_t m = prng(seed) & prng(seed) & prng(seed);
-        if (popcount((m * mask) >> 56) < bits / 2) continue;
-
-        std::fill(table.begin(), table.begin() + 4096, Bitboard(0));
-        bool ok = true;
-        for (int i = 0; i < count && ok; i++) {
-            int idx = int((occupancies[i] * m) >> shift);
-            if (table[idx] == 0)
-                table[idx] = attacks[i];
-            else if (table[idx] != attacks[i])
-                ok = false;
-        }
-        if (ok) { magic = m; return; }
-    }
-    magic = 0;
 }
 
 } // namespace
@@ -235,9 +227,13 @@ void init() {
         rookMasks_[s] = generateSliderMask(sq, false);
     }
 
-    // Magic numbers and attack tables
-    for (int s = 0; s < 64; s++) findBishopMagic(Square(s));
-    for (int s = 0; s < 64; s++) findRookMagic(Square(s));
+    // Magic numbers and attack tables (hardcoded, no runtime search)
+    for (int s = 0; s < 64; s++) {
+        bishopMagics_[s] = bishopMagicsKnown[s];
+        buildBishopTable(Square(s), bishopMagicsKnown[s]);
+        rookMagics_[s] = rookMagicsKnown[s];
+        buildRookTable(Square(s), rookMagicsKnown[s]);
+    }
 }
 
 // Public attack queries
