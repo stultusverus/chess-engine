@@ -25,6 +25,8 @@ private:
     Search search_;
     Book book_;
     bool bookEnabled_ = false;
+    int moveOverheadMs_ = 0;
+    bool showWdl_ = false;
 };
 
 } // namespace chess

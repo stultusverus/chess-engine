@@ -2,12 +2,86 @@
 #include "board.h"
 #include "search.h"
 #include "attacks.h"
+#include <algorithm>
+#include <cerrno>
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
 #include <iostream>
+#include <limits>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
 
 namespace chess {
+namespace {
+
+struct Wdl {
+    int win;
+    int draw;
+    int loss;
+};
+
+std::optional<int> parseInt(const std::string& value) {
+    if (value.empty()) return std::nullopt;
+
+    char* end = nullptr;
+    errno = 0;
+    long parsed = std::strtol(value.c_str(), &end, 10);
+    if (errno != 0 || end == value.c_str() || *end != '\0') {
+        return std::nullopt;
+    }
+
+    if (parsed < std::numeric_limits<int>::min() || parsed > std::numeric_limits<int>::max()) {
+        return std::nullopt;
+    }
+    return static_cast<int>(parsed);
+}
+
+std::optional<bool> parseBool(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (value == "true" || value == "1") return true;
+    if (value == "false" || value == "0") return false;
+    return std::nullopt;
+}
+
+Wdl approximateWdl(int score) {
+    constexpr int MATE_SCORE_THRESHOLD = 900000;
+    if (score >= MATE_SCORE_THRESHOLD) return {1000, 0, 0};
+    if (score <= -MATE_SCORE_THRESHOLD) return {0, 0, 1000};
+
+    double cp = std::clamp(static_cast<double>(score), -1000.0, 1000.0);
+    double expected = 1.0 / (1.0 + std::exp(-cp / 200.0));
+    int draw = static_cast<int>(std::lround(350.0 * std::exp(-std::abs(cp) / 300.0)));
+    draw = std::clamp(draw, 0, 1000);
+
+    int decisive = 1000 - draw;
+    int win = static_cast<int>(std::lround(decisive * expected));
+    win = std::clamp(win, 0, decisive);
+
+    return {win, draw, decisive - win};
+}
+
+void emitSearchInfo(const SearchResult& result, bool showWdl) {
+    std::cout << "info depth " << result.depth
+              << " score cp " << result.score;
+
+    if (showWdl) {
+        Wdl wdl = approximateWdl(result.score);
+        std::cout << " wdl " << wdl.win << ' ' << wdl.draw << ' ' << wdl.loss;
+    }
+
+    std::cout << " nodes " << result.nodes;
+    if (result.bestMove.from != SQ_NONE && result.bestMove.to != SQ_NONE) {
+        std::cout << " pv " << moveToString(result.bestMove);
+    }
+    std::cout << std::endl;
+}
+
+} // namespace
 
 UCI::UCI() {
     attacks::init();
@@ -38,8 +112,10 @@ void UCI::handleUci() {
     std::cout << "id name ChessEngine" << std::endl;
     std::cout << "id author chess-engine" << std::endl;
     std::cout << "option name Hash type spin default 64 min 1 max 4096" << std::endl;
+    std::cout << "option name Move Overhead type spin default 0 min 0 max 5000" << std::endl;
     std::cout << "option name OwnBook type check default false" << std::endl;
     std::cout << "option name Book File type string default <empty>" << std::endl;
+    std::cout << "option name UCI_ShowWDL type check default false" << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -129,6 +205,9 @@ void UCI::handleGo(const std::string& line) {
         timeMs = 3000; // Default
     }
 
+    if (timeMs > 0 && moveOverheadMs_ > 0) {
+        timeMs = std::max(10, timeMs - moveOverheadMs_);
+    }
     search_.setTimeMs(timeMs);
 
     // Probe opening book
@@ -144,6 +223,7 @@ void UCI::handleGo(const std::string& line) {
     int maxDepth = depth > 0 ? depth : 64;
     SearchResult result = search_.search(board_, maxDepth);
 
+    emitSearchInfo(result, showWdl_);
     std::cout << "bestmove " << moveToString(result.bestMove) << std::endl;
 }
 
@@ -175,18 +255,30 @@ void UCI::handleSetOption(const std::string& line) {
             name += token;
         }
         if (readingValue) {
-            value = token;
-            readingValue = false;
+            if (!value.empty()) value += ' ';
+            value += token;
         }
     }
 
     if (name == "Hash") {
-        search_.setTTSize(std::stoi(value));
+        if (auto mb = parseInt(value)) {
+            search_.setTTSize(std::clamp(*mb, 1, 4096));
+        }
+    } else if (name == "Move Overhead") {
+        if (auto ms = parseInt(value)) {
+            moveOverheadMs_ = std::clamp(*ms, 0, 5000);
+        }
     } else if (name == "OwnBook") {
-        bookEnabled_ = (value == "true");
+        if (auto enabled = parseBool(value)) {
+            bookEnabled_ = *enabled;
+        }
     } else if (name == "Book File") {
         if (!value.empty() && value != "<empty>")
             book_.load(value);
+    } else if (name == "UCI_ShowWDL") {
+        if (auto enabled = parseBool(value)) {
+            showWdl_ = *enabled;
+        }
     }
 }
 
