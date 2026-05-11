@@ -1,2 +1,6 @@
 build/
 .lichess.key
+lichess-bot
+config.yml
+engine.err
+lichess_bot_auto_logs/
