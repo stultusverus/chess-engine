@@ -89,13 +89,19 @@ void Board::setFen(const std::string& fen) {
     Square sq = A8;
     for (char c : placement) {
         if (c == '/') {
+            if (sq == 0) break;
             int prevRank = rankOf(Square(sq - 1));
+            if (prevRank <= 0) break;
             sq = makeSquare(FILE_A, Rank(prevRank - 1));
         } else if (std::isdigit(static_cast<unsigned char>(c))) {
             int empty = c - '0';
-            for (int i = 0; i < empty; i++)
+            if (empty < 1 || empty > 8) break;
+            for (int i = 0; i < empty; i++) {
                 sq = Square(sq + 1);
+                if (sq < 0 || sq >= 64) break;
+            }
         } else {
+            if (sq >= 64) break;
             Piece p = NO_PIECE;
             switch (c) {
             case 'P': p = W_PAWN; break; case 'N': p = W_KNIGHT; break;
@@ -279,6 +285,33 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
     // Reject friendly-piece captures
     if (mailbox_[move.to] != NO_PIECE && colorOf(mailbox_[move.to]) == us)
         return false;
+
+    // Verify pseudo-legal piece movement (non-castling only)
+    if (move.type != CASTLING) {
+        Bitboard reachable = 0;
+        switch (pt) {
+        case PAWN: {
+            int push = (us == WHITE) ? 8 : -8;
+            int oneIdx = move.from + push;
+            if (oneIdx >= 0 && oneIdx < 64 && mailbox_[Square(oneIdx)] == NO_PIECE) {
+                reachable |= squareBb(Square(oneIdx));
+                int startRank = (us == WHITE) ? RANK_2 : RANK_7;
+                int twoIdx = move.from + 2 * push;
+                if (rankOf(move.from) == startRank && twoIdx >= 0 && twoIdx < 64 && mailbox_[Square(twoIdx)] == NO_PIECE)
+                    reachable |= squareBb(Square(twoIdx));
+            }
+            reachable |= attacks::pawnAttacks(move.from, us);
+            break;
+        }
+        case KNIGHT: reachable = attacks::knightAttacks(move.from); break;
+        case BISHOP: reachable = attacks::bishopAttacks(move.from, occupied()); break;
+        case ROOK:   reachable = attacks::rookAttacks(move.from, occupied()); break;
+        case QUEEN:  reachable = attacks::queenAttacks(move.from, occupied()); break;
+        case KING:   reachable = attacks::kingAttacks(move.from); break;
+        default: return false;
+        }
+        if (!(reachable & squareBb(move.to))) return false;
+    }
 
     undo.move = move;
 

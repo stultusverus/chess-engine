@@ -12,6 +12,8 @@ std::string squareToString(Square s) {
 
 Square stringToSquare(const std::string& s) {
     if (s == "-" || s.size() < 2) return SQ_NONE;
+    if (s[0] < 'a' || s[0] > 'h') return SQ_NONE;
+    if (s[1] < '1' || s[1] > '8') return SQ_NONE;
     File f = File(s[0] - 'a');
     Rank r = Rank(s[1] - '1');
     return makeSquare(f, r);
