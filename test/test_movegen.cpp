@@ -12,6 +12,16 @@ static int failures = 0;
     if (failures == before) std::cout << "  " #name ": PASSED" << std::endl; \
 } while(0)
 
+static const chess::Move* findMove(const chess::MoveList& moves, chess::Square from,
+                                   chess::Square to,
+                                   chess::PieceType promotion = chess::PIECE_TYPE_NB) {
+    for (const chess::Move& m : moves) {
+        if (m.from == from && m.to == to && m.promotion == promotion)
+            return &m;
+    }
+    return nullptr;
+}
+
 void test_startpos_perft() {
     chess::MoveGenerator gen;
     chess::Board b;
@@ -91,6 +101,56 @@ void test_noCastlingWithoutRook() {
     }
 }
 
+void test_generatedMoveTypesAreClassified() {
+    chess::MoveGenerator gen;
+    chess::MoveList moves;
+
+    // Expected: generated captures are marked as captures for search ordering and qsearch.
+    chess::Board capture("4k3/8/8/3q4/3Q4/8/8/4K3 w - - 0 1");
+    gen.generateMoves(capture, moves);
+    const chess::Move* queenCapture = findMove(moves, chess::D4, chess::D5);
+    CHECK(queenCapture != nullptr);
+    if (queenCapture) CHECK(queenCapture->type == chess::CAPTURE);
+
+    // Expected: generated promotions carry PROMOTION metadata.
+    moves.clear();
+    chess::Board promotion("4k3/P7/8/8/8/8/8/4K3 w - - 0 1");
+    gen.generateMoves(promotion, moves);
+    const chess::Move* queenPromotion = findMove(moves, chess::A7, chess::A8, chess::QUEEN);
+    CHECK(queenPromotion != nullptr);
+    if (queenPromotion) CHECK(queenPromotion->type == chess::PROMOTION);
+
+    // Expected: generated en-passant captures carry EN_PASSANT metadata.
+    moves.clear();
+    chess::Board ep("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1");
+    gen.generateMoves(ep, moves);
+    const chess::Move* epCapture = findMove(moves, chess::E5, chess::D6);
+    CHECK(epCapture != nullptr);
+    if (epCapture) CHECK(epCapture->type == chess::EN_PASSANT);
+
+    // Expected: generated castling moves carry CASTLING metadata.
+    moves.clear();
+    chess::Board castle("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+    gen.generateMoves(castle, moves);
+    const chess::Move* whiteCastle = findMove(moves, chess::E1, chess::G1);
+    CHECK(whiteCastle != nullptr);
+    if (whiteCastle) CHECK(whiteCastle->type == chess::CASTLING);
+}
+
+void test_generateMovesClearsOutputList() {
+    chess::MoveGenerator gen;
+    chess::MoveList moves;
+
+    chess::Board start;
+    gen.generateMoves(start, moves);
+    CHECK(moves.size() == 20);
+
+    // Expected: the second call replaces the old contents instead of appending to them.
+    chess::Board checkmate("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
+    gen.generateMoves(checkmate, moves);
+    CHECK(moves.size() == 0);
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -103,6 +163,8 @@ int main() {
     RUN_TEST(pos5_perft);
     RUN_TEST(pos6_perft);
     RUN_TEST(noCastlingWithoutRook);
+    RUN_TEST(generatedMoveTypesAreClassified);
+    RUN_TEST(generateMovesClearsOutputList);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

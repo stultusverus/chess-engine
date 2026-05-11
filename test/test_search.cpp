@@ -63,6 +63,18 @@ void test_ttStoresMateScaleScore() {
 }
 
 // Back-rank mate in 1: Rd1-d8#
+void test_mateInOneAtDepth1() {
+    chess::Search search;
+    chess::Board b("1k6/ppp5/8/8/8/8/PPP5/1K1R4 w - - 0 1");
+    search.setInfinite(true);
+
+    // Expected: a depth-1 search sees that the checking move is immediate mate.
+    auto result = search.search(b, 1);
+    CHECK(result.score > 900000);
+    CHECK(result.bestMove.from == chess::D1);
+    CHECK(result.bestMove.to == chess::D8);
+}
+
 void test_mateInOne() {
     chess::Search search;
     chess::Board b("1k6/ppp5/8/8/8/8/PPP5/1K1R4 w - - 0 1");
@@ -199,6 +211,16 @@ void test_nullMoveMateGuard() {
     CHECK(result.bestMove.to == chess::D8);
 }
 
+void test_fiftyMoveRuleDraw() {
+    chess::Search search;
+    chess::Board b("4k3/8/8/8/8/8/8/4K2Q w - - 100 1");
+    search.setInfinite(true);
+
+    // Expected: positions at the 50-move-rule claim threshold are scored as draws.
+    auto result = search.search(b, 1);
+    CHECK(result.score == 0);
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -208,6 +230,7 @@ int main() {
     RUN_TEST(searchDepth1_fromStartpos);
     RUN_TEST(ttMovePackingPromotion);
     RUN_TEST(ttStoresMateScaleScore);
+    RUN_TEST(mateInOneAtDepth1);
     RUN_TEST(mateInOne);
     RUN_TEST(captureHangingQueen);
     RUN_TEST(captureHangingRook);
@@ -219,6 +242,7 @@ int main() {
     RUN_TEST(ttSpeedup);
     RUN_TEST(searchDepth5);
     RUN_TEST(nullMoveMateGuard);
+    RUN_TEST(fiftyMoveRuleDraw);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

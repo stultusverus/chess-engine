@@ -11,7 +11,7 @@ static int failures = 0;
     if (failures == before) std::cout << "  " #name ": PASSED" << std::endl; \
 } while(0)
 
-static std::string runEngine(const std::string& input) {
+static std::string escapeForSingleQuotedPrintf(const std::string& input) {
     std::string escaped;
     for (char c : input) {
         if (c == '\'')
@@ -19,8 +19,10 @@ static std::string runEngine(const std::string& input) {
         else
             escaped += c;
     }
+    return escaped;
+}
 
-    std::string command = "printf '" + escaped + "' | ./chess-engine 2>&1";
+static std::string runCommand(const std::string& command) {
     std::array<char, 256> buffer{};
     std::string output;
 
@@ -32,6 +34,44 @@ static std::string runEngine(const std::string& input) {
     pclose(pipe);
 
     return output;
+}
+
+static std::string runEngine(const std::string& input) {
+    std::string escaped = escapeForSingleQuotedPrintf(input);
+    std::string command = "printf '" + escaped + "' | ./chess-engine 2>&1";
+    return runCommand(command);
+}
+
+static std::string runEngineWithDelayedQuit(const std::string& input) {
+    std::string escaped = escapeForSingleQuotedPrintf(input);
+    std::string command = "{ printf '" + escaped + "'; sleep 0.1; printf 'quit\\n'; } | ./chess-engine 2>&1";
+    return runCommand(command);
+}
+
+static int countOccurrences(const std::string& haystack, const std::string& needle) {
+    int count = 0;
+    std::string::size_type pos = 0;
+    while ((pos = haystack.find(needle, pos)) != std::string::npos) {
+        count++;
+        pos += needle.size();
+    }
+    return count;
+}
+
+static std::string lastInfoLine(const std::string& output) {
+    std::string::size_type pos = output.rfind("info depth");
+    if (pos == std::string::npos) return "";
+    std::string::size_type end = output.find('\n', pos);
+    if (end == std::string::npos) return output.substr(pos);
+    return output.substr(pos, end - pos);
+}
+
+static std::string scoreField(const std::string& infoLine) {
+    std::string::size_type pos = infoLine.find("score ");
+    if (pos == std::string::npos) return "";
+    std::string::size_type end = infoLine.find(" nodes", pos);
+    if (end == std::string::npos) return infoLine.substr(pos);
+    return infoLine.substr(pos, end - pos);
 }
 
 static bool contains(const std::string& haystack, const std::string& needle) {
@@ -82,12 +122,42 @@ void test_acceptsLegalMoves() {
     expectLegal("position fen 4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1 moves e5d6");
 }
 
+void test_searchInfoEmittedOncePerCompletedGo() {
+    std::string output = runEngineWithDelayedQuit("position startpos\ngo depth 1\n");
+
+    // Expected: UCI emits one completed-search info line, followed by bestmove.
+    CHECK(countOccurrences(output, "info depth") == 1);
+    CHECK(contains(output, "bestmove "));
+}
+
+void test_mateScoresUseUciMateFormat() {
+    std::string output = runEngineWithDelayedQuit(
+        "position fen 1k6/ppp5/8/8/8/8/PPP5/1K1R4 w - - 0 1\n"
+        "go depth 2\n");
+
+    // Expected: mate scores use UCI score mate, not huge centipawn values.
+    CHECK(contains(output, "score mate "));
+    CHECK(!contains(output, "score cp 999"));
+}
+
+void test_repetitionIsScoredAsDraw() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos moves g1f3 g8f6 f3g1 f6g8 g1f3 g8f6 f3g1 f6g8\n"
+        "go depth 1\n");
+
+    // Expected: the third occurrence of the same position is scored as a draw.
+    CHECK(scoreField(lastInfoLine(output)) == "score cp 0");
+}
+
 int main() {
     std::cout << "Running UCI tests:" << std::endl;
     RUN_TEST(rejectsInvalidCoordinates);
     RUN_TEST(rejectsNonPseudoLegalMoves);
     RUN_TEST(rejectsMalformedPromotionTokens);
     RUN_TEST(acceptsLegalMoves);
+    RUN_TEST(searchInfoEmittedOncePerCompletedGo);
+    RUN_TEST(mateScoresUseUciMateFormat);
+    RUN_TEST(repetitionIsScoredAsDraw);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;
