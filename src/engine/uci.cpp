@@ -160,11 +160,24 @@ void UCI::handlePosition(const std::string& line) {
     std::string token;
     while (ss >> token) {
         if (token == "moves") continue;
+        if (token.size() != 4 && token.size() != 5) {
+            std::cerr << "[uci] illegal move: " << token << std::endl;
+            break;
+        }
         Square from = stringToSquare(token.substr(0, 2));
         Square to = stringToSquare(token.substr(2, 2));
+        if (from == SQ_NONE || to == SQ_NONE) {
+            std::cerr << "[uci] illegal move: " << token << std::endl;
+            break;
+        }
         PieceType promo = PIECE_TYPE_NB;
-        if (token.size() > 4)
+        if (token.size() == 5) {
             promo = charToPieceType(token[4]);
+            if (promo == PIECE_TYPE_NB) {
+                std::cerr << "[uci] illegal move: " << token << std::endl;
+                break;
+            }
+        }
 
         Move m(from, to, promo);
         UndoInfo undo;

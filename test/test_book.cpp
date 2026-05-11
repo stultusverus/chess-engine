@@ -4,6 +4,8 @@
 #include "engine/types.h"
 #include <iostream>
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 
 static int failures = 0;
 #define CHECK(expr) do { if (!(expr)) { std::cerr << "FAIL: " << #expr << std::endl; failures++; } } while(0)
@@ -40,6 +42,23 @@ void test_decodeRemapped() {
     auto m = chess::Book::decodePolyglotMove(packed);
     CHECK(m.from == chess::D2);
     CHECK(m.to == chess::D4);
+}
+
+static void writeBE16(std::ofstream& out, uint16_t value) {
+    out.put(static_cast<char>((value >> 8) & 0xFF));
+    out.put(static_cast<char>(value & 0xFF));
+}
+
+static void writeBE32(std::ofstream& out, uint32_t value) {
+    out.put(static_cast<char>((value >> 24) & 0xFF));
+    out.put(static_cast<char>((value >> 16) & 0xFF));
+    out.put(static_cast<char>((value >> 8) & 0xFF));
+    out.put(static_cast<char>(value & 0xFF));
+}
+
+static void writeBE64(std::ofstream& out, uint64_t value) {
+    for (int shift = 56; shift >= 0; shift -= 8)
+        out.put(static_cast<char>((value >> shift) & 0xFF));
 }
 
 void test_hashStartpos() {
@@ -100,6 +119,30 @@ void test_probeStartpos() {
     (void)sq;
 }
 
+void test_probeRemapsCastlingMove() {
+    const char* path = "test_castling_book.bin";
+    {
+        chess::Board b("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+        std::ofstream out(path, std::ios::binary);
+        uint16_t polyglotCastle = static_cast<uint16_t>((chess::E1 << 6) | chess::H1);
+        writeBE64(out, chess::Book::polyglotHash(b));
+        writeBE16(out, polyglotCastle);
+        writeBE16(out, 1);
+        writeBE32(out, 0);
+    }
+
+    chess::Book book;
+    CHECK(book.load(path));
+    chess::Board b("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+    auto m = book.probe(b);
+    CHECK(m.has_value());
+    CHECK(m->from == chess::E1);
+    CHECK(m->to == chess::G1);
+    CHECK(b.isMoveLegal(*m));
+
+    std::remove(path);
+}
+
 void test_probeEmptyBook() {
     chess::Book book;
     chess::Board b;
@@ -153,6 +196,7 @@ int main() {
     RUN_TEST(decodeNormalMove);
     RUN_TEST(decodePromotionMove);
     RUN_TEST(decodeRemapped);
+    RUN_TEST(probeRemapsCastlingMove);
     RUN_TEST(hashStartpos);
     RUN_TEST(hashAfterE4);
     RUN_TEST(hashAfterE4E5);

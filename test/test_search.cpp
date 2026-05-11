@@ -49,6 +49,19 @@ void test_ttMovePackingPromotion() {
     CHECK(unpackedPromo.promotion == chess::QUEEN);
 }
 
+void test_ttStoresMateScaleScore() {
+    chess::TranspositionTable tt;
+    tt.setSize(1);
+    chess::Move mate(chess::D1, chess::D8);
+    tt.store(0x123456789ABCDEF0ULL, 999900, 6, chess::Bound::EXACT, mate);
+
+    const chess::TTEntry* entry = tt.probe(0x123456789ABCDEF0ULL);
+    CHECK(entry != nullptr);
+    CHECK(entry->score == 999900);
+    CHECK(chess::TranspositionTable::unpackMove(entry->move).from == chess::D1);
+    CHECK(chess::TranspositionTable::unpackMove(entry->move).to == chess::D8);
+}
+
 // Back-rank mate in 1: Rd1-d8#
 void test_mateInOne() {
     chess::Search search;
@@ -194,6 +207,7 @@ int main() {
     RUN_TEST(searchReturnsMove);
     RUN_TEST(searchDepth1_fromStartpos);
     RUN_TEST(ttMovePackingPromotion);
+    RUN_TEST(ttStoresMateScaleScore);
     RUN_TEST(mateInOne);
     RUN_TEST(captureHangingQueen);
     RUN_TEST(captureHangingRook);

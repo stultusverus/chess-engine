@@ -66,3 +66,7 @@ add_test(NAME search COMMAND test_search)
 add_executable(test_book test/test_book.cpp)
 target_link_libraries(test_book PRIVATE engine)
 add_test(NAME book COMMAND test_book)
+
+add_executable(test_uci test/test_uci.cpp)
+add_dependencies(test_uci chess-engine)
+add_test(NAME uci COMMAND test_uci)

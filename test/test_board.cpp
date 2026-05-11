@@ -50,6 +50,13 @@ void test_moveToStringPromotions() {
     CHECK(chess::moveToString(chess::Move(chess::E2, chess::E4)) == "e2e4");
 }
 
+void test_stringToSquareRejectsInvalid() {
+    CHECK(chess::stringToSquare("-") == chess::SQ_NONE);
+    CHECK(chess::stringToSquare("") == chess::SQ_NONE);
+    CHECK(chess::stringToSquare("i2") == chess::SQ_NONE);
+    CHECK(chess::stringToSquare("a9") == chess::SQ_NONE);
+}
+
 void test_setFenResetsState() {
     chess::Board b;
     chess::UndoInfo undo;
@@ -91,6 +98,30 @@ void test_makeMove_unmake() {
     CHECK(b.pieceOn(chess::E2) == chess::W_PAWN);
     CHECK(b.pieceOn(chess::E4) == chess::NO_PIECE);
     CHECK(b.enPassant() == chess::SQ_NONE);
+}
+
+void test_invalidSquaresRejectedByBoard() {
+    chess::Board b;
+    std::string start = b.fen();
+    chess::UndoInfo undo;
+
+    CHECK(!b.makeMove(chess::Move(chess::SQ_NONE, chess::E4), undo));
+    CHECK(b.fen() == start);
+    CHECK(!b.makeMove(chess::Move(chess::E2, chess::SQ_NONE), undo));
+    CHECK(b.fen() == start);
+}
+
+void test_illegalPseudoMovesRejected() {
+    chess::Board b;
+    std::string start = b.fen();
+    chess::UndoInfo undo;
+
+    CHECK(!b.makeMove(chess::Move(chess::E2, chess::E5), undo));
+    CHECK(b.fen() == start);
+    CHECK(!b.makeMove(chess::Move(chess::B1, chess::B3), undo));
+    CHECK(b.fen() == start);
+    CHECK(!b.makeMove(chess::Move(chess::E2, chess::F3), undo));
+    CHECK(b.fen() == start);
 }
 
 void test_castling() {
@@ -173,6 +204,15 @@ void test_enPassantCapture() {
     CHECK(b.enPassant() == chess::D6);
 }
 
+void test_enPassantRequiresCapturedPawn() {
+    chess::Board b("4k3/8/8/4P3/8/8/8/4K3 w - d6 0 1");
+    std::string start = b.fen();
+    chess::UndoInfo undo;
+
+    CHECK(!b.makeMove(chess::Move(chess::E5, chess::D6), undo));
+    CHECK(b.fen() == start);
+}
+
 void test_promotion() {
     std::string fen = "8/P7/8/8/8/8/8/k6K w - - 0 1";
     chess::Board b(fen);
@@ -186,6 +226,39 @@ void test_promotion() {
     CHECK(b.pieceOn(chess::A8) == chess::NO_PIECE);
 }
 
+void test_invalidPromotionsRejected() {
+    {
+        chess::Board b("8/P7/8/8/8/8/8/k6K w - - 0 1");
+        std::string start = b.fen();
+        chess::UndoInfo undo;
+        CHECK(!b.makeMove(chess::Move(chess::A7, chess::A8), undo));
+        CHECK(b.fen() == start);
+    }
+    {
+        chess::Board b("8/P7/8/8/8/8/8/k6K w - - 0 1");
+        std::string start = b.fen();
+        chess::UndoInfo undo;
+        CHECK(!b.makeMove(chess::Move(chess::A7, chess::A8, chess::KING), undo));
+        CHECK(b.fen() == start);
+    }
+    {
+        chess::Board b;
+        std::string start = b.fen();
+        chess::UndoInfo undo;
+        CHECK(!b.makeMove(chess::Move(chess::E2, chess::E4, chess::QUEEN), undo));
+        CHECK(b.fen() == start);
+    }
+}
+
+void test_malformedFenHandledSafely() {
+    chess::Board badClocks("4k3/8/8/8/8/8/8/4K3 w - - x y");
+    CHECK(badClocks.halfMoveClock() == 0);
+    CHECK(badClocks.fullMoveNumber() == 1);
+
+    chess::Board badPlacement("9/8/8/8/8/8/8/8 w - - 0 1");
+    CHECK(badPlacement.fen() == "8/8/8/8/8/8/8/8 w - - 0 1");
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -195,17 +268,23 @@ int main() {
     RUN_TEST(fenParsing);
     RUN_TEST(fenRoundtrip);
     RUN_TEST(moveToStringPromotions);
+    RUN_TEST(stringToSquareRejectsInvalid);
     RUN_TEST(setFenResetsState);
     RUN_TEST(makeMove_basic);
     RUN_TEST(makeMove_doublePush);
     RUN_TEST(makeMove_unmake);
+    RUN_TEST(invalidSquaresRejectedByBoard);
+    RUN_TEST(illegalPseudoMovesRejected);
     RUN_TEST(castling);
     RUN_TEST(invalidCastlingRejected);
     RUN_TEST(unmakeRestoresCountersAndHash);
     RUN_TEST(illegalSelfCheck);
     RUN_TEST(kingInCheck);
     RUN_TEST(enPassantCapture);
+    RUN_TEST(enPassantRequiresCapturedPawn);
     RUN_TEST(promotion);
+    RUN_TEST(invalidPromotionsRejected);
+    RUN_TEST(malformedFenHandledSafely);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

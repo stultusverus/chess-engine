@@ -213,11 +213,20 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
     undo.oldHash = hash_;
     undo.captured = NO_PIECE;
 
+    if (move.from < A1 || move.from > H8 || move.to < A1 || move.to > H8)
+        return false;
+
     Piece p = mailbox_[move.from];
     if (p == NO_PIECE) return false;
     Color us = stm_;
     if (colorOf(p) != us) return false;
     PieceType pt = typeOf(p);
+
+    bool promotionTarget = pt == PAWN && (rankOf(move.to) == RANK_8 || rankOf(move.to) == RANK_1);
+    if (move.promotion != PIECE_TYPE_NB &&
+        (!promotionTarget || move.promotion < KNIGHT || move.promotion > QUEEN)) {
+        return false;
+    }
 
     // Classify move if not pre-classified
     if (move.type == NORMAL) {
@@ -286,6 +295,19 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
     if (mailbox_[move.to] != NO_PIECE && colorOf(mailbox_[move.to]) == us)
         return false;
 
+    if ((move.type == CAPTURE || move.type == PROMOTION_CAPTURE) && mailbox_[move.to] == NO_PIECE)
+        return false;
+    if ((move.type == NORMAL || move.type == PROMOTION) && mailbox_[move.to] != NO_PIECE)
+        return false;
+    if (move.type == EN_PASSANT) {
+        int capturedIdx = us == WHITE ? move.to - 8 : move.to + 8;
+        if (pt != PAWN || mailbox_[move.to] != NO_PIECE ||
+            capturedIdx < 0 || capturedIdx >= 64 ||
+            mailbox_[Square(capturedIdx)] != makePiece(~us, PAWN)) {
+            return false;
+        }
+    }
+
     // Verify pseudo-legal piece movement (non-castling only)
     if (move.type != CASTLING) {
         Bitboard reachable = 0;
@@ -300,7 +322,8 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
                 if (rankOf(move.from) == startRank && twoIdx >= 0 && twoIdx < 64 && mailbox_[Square(twoIdx)] == NO_PIECE)
                     reachable |= squareBb(Square(twoIdx));
             }
-            reachable |= attacks::pawnAttacks(move.from, us);
+            if (move.type == CAPTURE || move.type == EN_PASSANT || move.type == PROMOTION_CAPTURE)
+                reachable |= attacks::pawnAttacks(move.from, us);
             break;
         }
         case KNIGHT: reachable = attacks::knightAttacks(move.from); break;
@@ -312,6 +335,11 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
         }
         if (!(reachable & squareBb(move.to))) return false;
     }
+
+    // Reject promotions without a valid promotion piece
+    if ((move.type == PROMOTION || move.type == PROMOTION_CAPTURE) &&
+        (move.promotion < KNIGHT || move.promotion > QUEEN))
+        return false;
 
     undo.move = move;
 
