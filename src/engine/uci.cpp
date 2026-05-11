@@ -88,6 +88,10 @@ UCI::UCI() {
     Board::initZobrist();
 }
 
+UCI::~UCI() {
+    stopSearch();
+}
+
 void UCI::loop() {
     std::string line;
     while (std::getline(std::cin, line)) {
@@ -103,7 +107,7 @@ void UCI::loop() {
         else if (cmd == "position") handlePosition(line);
         else if (cmd == "go")       handleGo(line);
         else if (cmd == "stop")     handleStop();
-        else if (cmd == "quit")     break;
+        else if (cmd == "quit")     { stopSearch(); break; }
         else if (cmd == "setoption") handleSetOption(line);
     }
 }
@@ -124,11 +128,14 @@ void UCI::handleIsReady() {
 }
 
 void UCI::handleUciNewGame() {
+    stopSearch();
     search_.clearTT();
     board_ = Board();
 }
 
 void UCI::handlePosition(const std::string& line) {
+    stopSearch();
+
     std::istringstream ss(line);
     std::string cmd, posType;
     ss >> cmd >> posType; // skip "position"
@@ -166,6 +173,8 @@ void UCI::handlePosition(const std::string& line) {
 }
 
 void UCI::handleGo(const std::string& line) {
+    stopSearch();
+
     std::istringstream ss(line);
     std::string cmd, token;
     ss >> cmd; // "go"
@@ -208,7 +217,9 @@ void UCI::handleGo(const std::string& line) {
     if (timeMs > 0 && moveOverheadMs_ > 0) {
         timeMs = std::max(10, timeMs - moveOverheadMs_);
     }
-    search_.setTimeMs(timeMs);
+    if (!infinite) {
+        search_.setTimeMs(timeMs);
+    }
 
     // Probe opening book
     if (bookEnabled_ && book_.isLoaded()) {
@@ -221,14 +232,40 @@ void UCI::handleGo(const std::string& line) {
     }
 
     int maxDepth = depth > 0 ? depth : 64;
-    SearchResult result = search_.search(board_, maxDepth);
+    Board searchBoard = board_;
+    bool showWdl = showWdl_;
+    searchRunning_.store(true);
+    searchThread_ = std::thread([this, searchBoard, maxDepth, showWdl]() mutable {
+        SearchResult result = search_.search(searchBoard, maxDepth);
+        if (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE) {
+            MoveList moves;
+            MoveGenerator gen;
+            gen.generateMoves(searchBoard, moves);
+            if (moves.size() > 0) {
+                result.bestMove = moves[0];
+            }
+        }
 
-    emitSearchInfo(result, showWdl_);
-    std::cout << "bestmove " << moveToString(result.bestMove) << std::endl;
+        emitSearchInfo(result, showWdl);
+        if (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE) {
+            std::cout << "bestmove 0000" << std::endl;
+        } else {
+            std::cout << "bestmove " << moveToString(result.bestMove) << std::endl;
+        }
+        searchRunning_.store(false);
+    });
 }
 
 void UCI::handleStop() {
+    stopSearch();
+}
+
+void UCI::stopSearch() {
     search_.stop();
+    if (searchThread_.joinable()) {
+        searchThread_.join();
+    }
+    searchRunning_.store(false);
 }
 
 void UCI::handleSetOption(const std::string& line) {

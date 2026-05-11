@@ -4,12 +4,15 @@
 #include "board.h"
 #include "search.h"
 #include "book.h"
+#include <atomic>
+#include <thread>
 
 namespace chess {
 
 class UCI {
 public:
     UCI();
+    ~UCI();
     void loop();
 
 private:
@@ -20,6 +23,7 @@ private:
     void handleGo(const std::string& line);
     void handleStop();
     void handleSetOption(const std::string& line);
+    void stopSearch();
 
     Board board_;
     Search search_;
@@ -27,6 +31,8 @@ private:
     bool bookEnabled_ = false;
     int moveOverheadMs_ = 0;
     bool showWdl_ = false;
+    std::thread searchThread_;
+    std::atomic<bool> searchRunning_{false};
 };
 
 } // namespace chess

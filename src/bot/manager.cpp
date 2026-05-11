@@ -4,6 +4,7 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <vector>
 
 namespace chess {
 namespace bot {
@@ -16,8 +17,33 @@ Manager::Manager(const std::string& token) : client_(token) {
 
 Manager::~Manager() {
     running_ = false;
+    std::vector<std::thread> gameThreads;
+    {
+        std::lock_guard<std::mutex> lock(gamesMutex_);
+        for (auto& [_, ctx] : games_) {
+            ctx->active.store(false);
+            ctx->search.stop();
+        }
+        games_.clear();
+        for (auto& [_, thread] : gameThreads_) {
+            if (thread.joinable()) {
+                gameThreads.push_back(std::move(thread));
+            }
+        }
+        gameThreads_.clear();
+        finishedGameIds_.clear();
+    }
     if (workerThread_.joinable()) {
         workerThread_.join();
+    }
+    for (auto& thread : gameThreads) {
+        if (thread.joinable()) {
+            if (thread.get_id() == std::this_thread::get_id()) {
+                thread.detach();
+            } else {
+                thread.join();
+            }
+        }
     }
 }
 
@@ -107,6 +133,42 @@ void Manager::workerLoop() {
     }
 }
 
+std::shared_ptr<Manager::GameContext> Manager::getGameContext(const std::string& gameId) {
+    std::lock_guard<std::mutex> lock(gamesMutex_);
+    auto it = games_.find(gameId);
+    if (it == games_.end()) return nullptr;
+    return it->second;
+}
+
+void Manager::cleanupGameThreads() {
+    std::vector<std::thread> threadsToJoin;
+    {
+        std::lock_guard<std::mutex> lock(gamesMutex_);
+        while (!finishedGameIds_.empty()) {
+            std::string gameId = std::move(finishedGameIds_.front());
+            finishedGameIds_.pop_front();
+
+            auto it = gameThreads_.find(gameId);
+            if (it == gameThreads_.end()) continue;
+
+            if (it->second.joinable()) {
+                if (it->second.get_id() == std::this_thread::get_id()) {
+                    it->second.detach();
+                } else {
+                    threadsToJoin.push_back(std::move(it->second));
+                }
+            }
+            gameThreads_.erase(it);
+        }
+    }
+
+    for (auto& thread : threadsToJoin) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+}
+
 void Manager::challengeOpponent(const std::string& username, int clockLimit, int clockInc, bool rated) {
     std::cerr << "Challenging " << username
               << " (" << clockLimit << "+" << clockInc << (rated ? ", rated" : ", casual") << ")"
@@ -187,6 +249,8 @@ void Manager::run() {
 }
 
 void Manager::onEvent(const json& ev) {
+    cleanupGameThreads();
+
     std::string type = ev.value("type", "");
     if (debug_) std::cerr << "[event] type=" << type << std::endl;
 
@@ -245,36 +309,65 @@ void Manager::handleChallenge(const json& challenge) {
 void Manager::handleGameStart(const std::string& gameId) {
     std::cerr << "Game started: " << gameId << std::endl;
 
-    GameContext ctx;
-    ctx.id = gameId;
-    games_[gameId] = ctx;
+    auto ctx = std::make_shared<GameContext>();
+    ctx->id = gameId;
+    {
+        std::lock_guard<std::mutex> lock(gamesMutex_);
+        games_[gameId] = ctx;
+    }
 
-    // Start game in background thread
-    std::thread([this, gameId]() {
+    std::thread gameThread([this, gameId]() {
         playGame(gameId);
-    }).detach();
+    });
+
+    {
+        std::lock_guard<std::mutex> lock(gamesMutex_);
+        gameThreads_[gameId] = std::move(gameThread);
+    }
 }
 
 void Manager::handleGameFinish(const std::string& gameId) {
     std::cerr << "Game finished: " << gameId << std::endl;
-    games_.erase(gameId);
+    std::shared_ptr<GameContext> ctx;
+    {
+        std::lock_guard<std::mutex> lock(gamesMutex_);
+        auto it = games_.find(gameId);
+        if (it != games_.end()) {
+            ctx = it->second;
+            games_.erase(it);
+        }
+    }
+    if (ctx) {
+        ctx->active.store(false);
+        ctx->search.stop();
+    }
+    cleanupGameThreads();
 }
 
 void Manager::playGame(const std::string& gameId) {
-    auto& ctx = games_[gameId];
-    ctx.search.setTTSize(64);
+    auto ctx = getGameContext(gameId);
+    if (!ctx) return;
+    ctx->search.setTTSize(64);
 
     client_.streamGame(gameId, [this, gameId](const json& ev) {
-        if (!running_ || games_.find(gameId) == games_.end()) return;
-        processGameState(gameId, ev);
+        if (!running_) return;
+        auto ctx = getGameContext(gameId);
+        if (!ctx || !ctx->active.load()) return;
+        processGameState(gameId, *ctx, ev);
     });
+
+    if (ctx) {
+        ctx->active.store(false);
+    }
+    {
+        std::lock_guard<std::mutex> lock(gamesMutex_);
+        finishedGameIds_.push_back(gameId);
+    }
 }
 
-void Manager::processGameState(const std::string& gameId, const json& state) {
-    auto it = games_.find(gameId);
-    if (it == games_.end()) return;
+void Manager::processGameState(const std::string& gameId, GameContext& ctx, const json& state) {
+    if (!ctx.active.load()) return;
 
-    auto& ctx = it->second;
     std::string type = state.value("type", "");
 
     if (type == "gameFull") {

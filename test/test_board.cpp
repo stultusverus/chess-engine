@@ -42,6 +42,19 @@ void test_fenRoundtrip() {
     CHECK(fen1 == fen2);
 }
 
+void test_setFenResetsState() {
+    chess::Board b;
+    chess::UndoInfo undo;
+    b.makeMove(chess::Move(chess::E2, chess::E4), undo);
+
+    b.setFen("4k3/8/8/8/8/8/8/4K3 w - - 12 34");
+    CHECK(b.castlingRights() == 0);
+    CHECK(b.enPassant() == chess::SQ_NONE);
+    CHECK(b.halfMoveClock() == 12);
+    CHECK(b.fullMoveNumber() == 34);
+    CHECK(b.fen() == "4k3/8/8/8/8/8/8/4K3 w - - 12 34");
+}
+
 void test_makeMove_basic() {
     chess::Board b;
     chess::UndoInfo undo;
@@ -83,6 +96,43 @@ void test_castling() {
     CHECK(b.pieceOn(chess::H1) == chess::NO_PIECE);
     CHECK(b.pieceOn(chess::E1) == chess::NO_PIECE);
     CHECK((b.castlingRights() & chess::WK) == 0);
+}
+
+void test_invalidCastlingRejected() {
+    {
+        chess::Board b("4k3/8/8/8/8/8/8/4K3 w K - 0 1");
+        chess::UndoInfo undo;
+        CHECK(!b.makeMove(chess::Move(chess::E1, chess::G1), undo));
+        CHECK(b.pieceOn(chess::E1) == chess::W_KING);
+        CHECK(b.fen() == "4k3/8/8/8/8/8/8/4K3 w K - 0 1");
+    }
+    {
+        chess::Board b("4k3/8/8/8/8/8/8/4K2R w - - 0 1");
+        chess::UndoInfo undo;
+        CHECK(!b.makeMove(chess::Move(chess::E1, chess::G1), undo));
+        CHECK(b.pieceOn(chess::E1) == chess::W_KING);
+        CHECK(b.pieceOn(chess::H1) == chess::W_ROOK);
+    }
+}
+
+void test_unmakeRestoresCountersAndHash() {
+    chess::Board b;
+    uint64_t startHash = b.hash();
+    chess::UndoInfo whiteUndo;
+    CHECK(b.makeMove(chess::Move(chess::E2, chess::E4), whiteUndo));
+    uint64_t afterWhiteHash = b.hash();
+    int afterWhiteFullMove = b.fullMoveNumber();
+
+    chess::UndoInfo blackUndo;
+    CHECK(b.makeMove(chess::Move(chess::E7, chess::E5), blackUndo));
+    CHECK(b.fullMoveNumber() == afterWhiteFullMove + 1);
+    b.unmakeMove(chess::Move(chess::E7, chess::E5), blackUndo);
+    CHECK(b.hash() == afterWhiteHash);
+    CHECK(b.fullMoveNumber() == afterWhiteFullMove);
+
+    b.unmakeMove(chess::Move(chess::E2, chess::E4), whiteUndo);
+    CHECK(b.hash() == startHash);
+    CHECK(b.fullMoveNumber() == 1);
 }
 
 void test_illegalSelfCheck() {
@@ -136,10 +186,13 @@ int main() {
     RUN_TEST(startPosition);
     RUN_TEST(fenParsing);
     RUN_TEST(fenRoundtrip);
+    RUN_TEST(setFenResetsState);
     RUN_TEST(makeMove_basic);
     RUN_TEST(makeMove_doublePush);
     RUN_TEST(makeMove_unmake);
     RUN_TEST(castling);
+    RUN_TEST(invalidCastlingRejected);
+    RUN_TEST(unmakeRestoresCountersAndHash);
     RUN_TEST(illegalSelfCheck);
     RUN_TEST(kingInCheck);
     RUN_TEST(enPassantCapture);

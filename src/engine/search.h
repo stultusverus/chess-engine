@@ -4,6 +4,8 @@
 #include "eval.h"
 #include "movegen.h"
 #include "tt.h"
+#include <atomic>
+#include <chrono>
 
 namespace chess {
 
@@ -26,7 +28,7 @@ public:
     void setTTSize(int mb) { tt_.setSize(mb); }
     void clearTT() { tt_.clear(); }
     void stop();
-    bool isStopped() const { return stop_; }
+    bool isStopped() const { return stop_.load(); }
 
     SearchResult search(const Board& board, int maxDepth = 64);
 
@@ -40,11 +42,13 @@ private:
     void ageHistory();
     void updateKiller(Move m, int ply);
     void updateHistory(Move m, int depth);
+    bool shouldStop();
 
     // Time control
     int timeMs_ = 0;
     bool infinite_ = false;
-    bool stop_ = false;
+    std::atomic<bool> stop_{false};
+    std::chrono::steady_clock::time_point startTime_{};
     uint64_t nodes_ = 0;
     uint64_t nodesLimit_ = 0;
 

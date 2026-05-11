@@ -60,6 +60,12 @@ void Board::setFen(const std::string& fen) {
     std::fill(byPiece_.begin(), byPiece_.end(), Bitboard(0));
     std::fill(byColor_.begin(), byColor_.end(), Bitboard(0));
     std::fill(mailbox_.begin(), mailbox_.end(), NO_PIECE);
+    stm_ = WHITE;
+    ep_ = SQ_NONE;
+    castle_ = 0;
+    halfMoves_ = 0;
+    fullMoves_ = 1;
+    hash_ = 0;
 
     std::istringstream ss(fen);
     std::string placement, stm, castle, ep, half, full;
@@ -72,7 +78,7 @@ void Board::setFen(const std::string& fen) {
         if (c == '/') {
             int prevRank = rankOf(Square(sq - 1));
             sq = makeSquare(FILE_A, Rank(prevRank - 1));
-        } else if (std::isdigit(c)) {
+        } else if (std::isdigit(static_cast<unsigned char>(c))) {
             int empty = c - '0';
             for (int i = 0; i < empty; i++)
                 sq = Square(sq + 1);
@@ -184,6 +190,7 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
     undo.oldEp = ep_;
     undo.oldCastle = castle_;
     undo.oldHalfMoves = halfMoves_;
+    undo.oldFullMoves = fullMoves_;
     undo.oldHash = hash_;
     undo.captured = NO_PIECE;
 
@@ -203,6 +210,57 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
             move.type = CASTLING;
         else if (mailbox_[move.to] != NO_PIECE)
             move.type = CAPTURE;
+    }
+
+    if (move.type == CASTLING) {
+        if (pt != KING) return false;
+
+        const Color enemy = ~us;
+        if (us == WHITE) {
+            if (move.from != E1) return false;
+            if (move.to == G1) {
+                if (!(castle_ & WK) || mailbox_[H1] != W_ROOK ||
+                    mailbox_[F1] != NO_PIECE || mailbox_[G1] != NO_PIECE ||
+                    attacks::isSquareAttacked(*this, E1, enemy) ||
+                    attacks::isSquareAttacked(*this, F1, enemy) ||
+                    attacks::isSquareAttacked(*this, G1, enemy)) {
+                    return false;
+                }
+            } else if (move.to == C1) {
+                if (!(castle_ & WQ) || mailbox_[A1] != W_ROOK ||
+                    mailbox_[D1] != NO_PIECE || mailbox_[C1] != NO_PIECE ||
+                    mailbox_[B1] != NO_PIECE ||
+                    attacks::isSquareAttacked(*this, E1, enemy) ||
+                    attacks::isSquareAttacked(*this, D1, enemy) ||
+                    attacks::isSquareAttacked(*this, C1, enemy)) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } else {
+            if (move.from != E8) return false;
+            if (move.to == G8) {
+                if (!(castle_ & BK) || mailbox_[H8] != B_ROOK ||
+                    mailbox_[F8] != NO_PIECE || mailbox_[G8] != NO_PIECE ||
+                    attacks::isSquareAttacked(*this, E8, enemy) ||
+                    attacks::isSquareAttacked(*this, F8, enemy) ||
+                    attacks::isSquareAttacked(*this, G8, enemy)) {
+                    return false;
+                }
+            } else if (move.to == C8) {
+                if (!(castle_ & BQ) || mailbox_[A8] != B_ROOK ||
+                    mailbox_[D8] != NO_PIECE || mailbox_[C8] != NO_PIECE ||
+                    mailbox_[B8] != NO_PIECE ||
+                    attacks::isSquareAttacked(*this, E8, enemy) ||
+                    attacks::isSquareAttacked(*this, D8, enemy) ||
+                    attacks::isSquareAttacked(*this, C8, enemy)) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
     }
 
     undo.move = move;
@@ -295,16 +353,13 @@ void Board::unmakeMove(Move /*move*/, const UndoInfo& undo) {
     const Move& m = undo.move;
     Piece p = mailbox_[m.to];
     Color us = ~stm_; // The side that made the move
-    PieceType pt = typeOf(p);
-
-    // Undo side toggle
-    hash_ = undo.oldHash;
 
     // Restore state
     stm_ = us;
     ep_ = undo.oldEp;
     castle_ = undo.oldCastle;
     halfMoves_ = undo.oldHalfMoves;
+    fullMoves_ = undo.oldFullMoves;
 
     // Remove piece from destination
     if (m.type == PROMOTION || m.type == PROMOTION_CAPTURE) {
@@ -338,6 +393,8 @@ void Board::unmakeMove(Move /*move*/, const UndoInfo& undo) {
         else if (m.to == G8) movePiece(B_ROOK, F8, H8);
         else if (m.to == C8) movePiece(B_ROOK, D8, A8);
     }
+
+    hash_ = undo.oldHash;
 }
 
 void Board::makeNullMove(NullUndo& undo) {

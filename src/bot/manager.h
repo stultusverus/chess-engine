@@ -11,6 +11,7 @@
 #include <mutex>
 #include <deque>
 #include <functional>
+#include <memory>
 #include <unordered_map>
 
 namespace chess {
@@ -51,6 +52,7 @@ public:
         int btime = 0;
         bool drawOffered = false;
         int consecutiveDrawishMoves = 0;
+        std::atomic<bool> active{true};
     };
 
 private:
@@ -59,12 +61,14 @@ private:
     void handleGameStart(const std::string& gameId);
     void handleGameFinish(const std::string& gameId);
     void playGame(const std::string& gameId);
-    void processGameState(const std::string& gameId, const json& state);
+    void processGameState(const std::string& gameId, GameContext& ctx, const json& state);
     bool tryBookMove(const std::string& gameId, GameContext& ctx);
     bool maybeResignOrDraw(const std::string& gameId, GameContext& ctx, const chess::SearchResult& result);
+    std::shared_ptr<GameContext> getGameContext(const std::string& gameId);
 
     void enqueue(std::function<void()> task);
     void workerLoop();
+    void cleanupGameThreads();
 
     Client client_;
     std::atomic<bool> running_{true};
@@ -97,7 +101,10 @@ private:
     int drawOfferMoves_ = 4;
 
     // Active games
-    std::unordered_map<std::string, GameContext> games_;
+    std::unordered_map<std::string, std::shared_ptr<GameContext>> games_;
+    std::unordered_map<std::string, std::thread> gameThreads_;
+    std::deque<std::string> finishedGameIds_;
+    std::mutex gamesMutex_;
 };
 
 } // namespace bot

@@ -17,15 +17,15 @@ Search::Search() {
 void Search::setTimeMs(int ms) {
     timeMs_ = ms;
     infinite_ = false;
-    stop_ = false;
+    stop_.store(false);
 }
 
 void Search::setInfinite(bool inf) {
     infinite_ = inf;
-    stop_ = false;
+    stop_.store(false);
 }
 
-void Search::stop() { stop_ = true; }
+void Search::stop() { stop_.store(true); }
 
 SearchResult Search::search(const Board& board, int maxDepth) {
     SearchResult result;
@@ -39,9 +39,9 @@ SearchResult Search::search(const Board& board, int maxDepth) {
     nodesLimit_ = 1024;
     ageHistory();
 
-    auto startTime = std::chrono::steady_clock::now();
+    startTime_ = std::chrono::steady_clock::now();
 
-    for (int depth = 1; depth <= maxDepth && depth < MAX_PLY - 20; depth++) {
+    for (int depth = 1; depth <= maxDepth && depth < MAX_PLY - 20 && !stop_.load(); depth++) {
         int alpha = -INF;
         int beta = INF;
 
@@ -53,7 +53,7 @@ SearchResult Search::search(const Board& board, int maxDepth) {
         bool research = false;
         do {
             int score = alphaBeta(const_cast<Board&>(board), depth, alpha, beta, 0);
-            if (stop_) break;
+            if (stop_.load()) break;
 
             if (score <= alpha) {
                 alpha = -INF;
@@ -65,15 +65,15 @@ SearchResult Search::search(const Board& board, int maxDepth) {
                 research = false;
                 result.score = score;
             }
-        } while (research && !stop_);
+        } while (research && !stop_.load());
 
-        if (stop_) break;
+        if (stop_.load()) break;
 
         result.depth = depth;
         result.bestMove = bestMoveRoot_;
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - startTime).count();
+            std::chrono::steady_clock::now() - startTime_).count();
 
         static std::ofstream logFile("engine.err", std::ios::app);
         logFile << "info depth " << depth
@@ -83,8 +83,7 @@ SearchResult Search::search(const Board& board, int maxDepth) {
                 << " pv " << moveToString(result.bestMove)
                 << std::endl;
 
-        if (!infinite_ && timeMs_ > 0 && elapsed >= timeMs_ / 4) {
-            stop_ = true;
+        if (shouldStop()) {
             break;
         }
     }
@@ -94,10 +93,11 @@ SearchResult Search::search(const Board& board, int maxDepth) {
 }
 
 int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
+    if (stop_.load()) return 0;
     nodes_++;
     if (nodes_ >= nodesLimit_) {
         nodesLimit_ += 1024;
-        if (stop_) return 0;
+        if (shouldStop()) return 0;
     }
 
     // TT probe
@@ -213,7 +213,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         board.unmakeMove(m, undo);
         movesMade++;
 
-        if (stop_) return 0;
+        if (stop_.load()) return 0;
 
         if (score > bestScore) {
             bestScore = score;
@@ -251,10 +251,11 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
 }
 
 int Search::quiesce(Board& board, int alpha, int beta, int ply) {
+    if (stop_.load()) return 0;
     nodes_++;
     if (nodes_ >= nodesLimit_) {
         nodesLimit_ += 1024;
-        if (stop_) return 0;
+        if (shouldStop()) return 0;
     }
 
     int standPat = eval_.evaluate(board);
@@ -300,7 +301,7 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
         int score = -quiesce(board, -beta, -alpha, ply + 1);
         board.unmakeMove(m, undo);
 
-        if (stop_) return 0;
+        if (stop_.load()) return 0;
 
         if (score >= beta) return beta;
         if (score > alpha) alpha = score;
@@ -358,6 +359,19 @@ void Search::updateHistory(Move m, int depth) {
     history_[m.from][m.to] += depth * depth;
     if (history_[m.from][m.to] > HISTORY_MAX)
         history_[m.from][m.to] = HISTORY_MAX;
+}
+
+bool Search::shouldStop() {
+    if (stop_.load()) return true;
+    if (!infinite_ && timeMs_ > 0) {
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - startTime_).count();
+        if (elapsed >= timeMs_) {
+            stop_.store(true);
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace chess

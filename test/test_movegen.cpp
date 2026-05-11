@@ -80,6 +80,17 @@ void test_pos6_perft() {
     std::cout << "     perft(4)=" << gen.perft(b, 4) << " (expect 3894594)" << std::endl;
 }
 
+void test_noCastlingWithoutRook() {
+    chess::MoveGenerator gen;
+    chess::Board b("4k3/8/8/8/8/8/8/4K3 w K - 0 1");
+    chess::MoveList moves;
+    gen.generateMoves(b, moves);
+
+    for (const chess::Move& m : moves) {
+        CHECK(!(m.from == chess::E1 && m.to == chess::G1));
+    }
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -91,6 +102,7 @@ int main() {
     RUN_TEST(pos4_perft);
     RUN_TEST(pos5_perft);
     RUN_TEST(pos6_perft);
+    RUN_TEST(noCastlingWithoutRook);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

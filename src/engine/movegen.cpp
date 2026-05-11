@@ -146,14 +146,16 @@ void MoveGenerator::generateCastlingMoves(const Board& board, MoveList& moves) {
     int cr = board.castlingRights();
 
     if (us == WHITE) {
-        if ((cr & WK) && !(occ & (squareBb(F1) | squareBb(G1)))) {
+        if ((cr & WK) && board.pieceOn(E1) == W_KING && board.pieceOn(H1) == W_ROOK &&
+            !(occ & (squareBb(F1) | squareBb(G1)))) {
             if (!attacks::isSquareAttacked(board, E1, enemy) &&
                 !attacks::isSquareAttacked(board, F1, enemy) &&
                 !attacks::isSquareAttacked(board, G1, enemy)) {
                 moves.add(Move(E1, G1));
             }
         }
-        if ((cr & WQ) && !(occ & (squareBb(D1) | squareBb(C1) | squareBb(B1)))) {
+        if ((cr & WQ) && board.pieceOn(E1) == W_KING && board.pieceOn(A1) == W_ROOK &&
+            !(occ & (squareBb(D1) | squareBb(C1) | squareBb(B1)))) {
             if (!attacks::isSquareAttacked(board, E1, enemy) &&
                 !attacks::isSquareAttacked(board, D1, enemy) &&
                 !attacks::isSquareAttacked(board, C1, enemy)) {
@@ -161,14 +163,16 @@ void MoveGenerator::generateCastlingMoves(const Board& board, MoveList& moves) {
             }
         }
     } else {
-        if ((cr & BK) && !(occ & (squareBb(F8) | squareBb(G8)))) {
+        if ((cr & BK) && board.pieceOn(E8) == B_KING && board.pieceOn(H8) == B_ROOK &&
+            !(occ & (squareBb(F8) | squareBb(G8)))) {
             if (!attacks::isSquareAttacked(board, E8, enemy) &&
                 !attacks::isSquareAttacked(board, F8, enemy) &&
                 !attacks::isSquareAttacked(board, G8, enemy)) {
                 moves.add(Move(E8, G8));
             }
         }
-        if ((cr & BQ) && !(occ & (squareBb(D8) | squareBb(C8) | squareBb(B8)))) {
+        if ((cr & BQ) && board.pieceOn(E8) == B_KING && board.pieceOn(A8) == B_ROOK &&
+            !(occ & (squareBb(D8) | squareBb(C8) | squareBb(B8)))) {
             if (!attacks::isSquareAttacked(board, E8, enemy) &&
                 !attacks::isSquareAttacked(board, D8, enemy) &&
                 !attacks::isSquareAttacked(board, C8, enemy)) {

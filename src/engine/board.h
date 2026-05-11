@@ -74,6 +74,7 @@ struct UndoInfo {
     Square oldEp;
     int oldCastle;
     int oldHalfMoves;
+    int oldFullMoves;
     uint64_t oldHash;
 };
 
