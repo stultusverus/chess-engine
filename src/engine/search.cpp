@@ -2,6 +2,7 @@
 #include "board.h"
 #include <algorithm>
 #include <chrono>
+#include <fstream>
 #include <iostream>
 
 namespace chess {
@@ -74,12 +75,13 @@ SearchResult Search::search(const Board& board, int maxDepth) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - startTime).count();
 
-        std::cerr << "info depth " << depth
-                  << " score cp " << result.score
-                  << " time " << elapsed
-                  << " nodes " << nodes_
-                  << " pv " << moveToString(result.bestMove)
-                  << std::endl;
+        static std::ofstream logFile("engine.err", std::ios::app);
+        logFile << "info depth " << depth
+                << " score cp " << result.score
+                << " time " << elapsed
+                << " nodes " << nodes_
+                << " pv " << moveToString(result.bestMove)
+                << std::endl;
 
         if (!infinite_ && timeMs_ > 0 && elapsed >= timeMs_ / 4) {
             stop_ = true;
