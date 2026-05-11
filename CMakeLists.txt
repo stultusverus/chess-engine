@@ -5,9 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Find dependencies
-find_package(CURL REQUIRED)
-
 find_package(nlohmann_json QUIET)
 if(NOT nlohmann_json_FOUND)
     include(FetchContent)
@@ -43,24 +40,9 @@ add_library(engine STATIC
 target_include_directories(engine PUBLIC src)
 target_link_libraries(engine PUBLIC nlohmann_json::nlohmann_json)
 
-# Bot library
-add_library(bot STATIC
-    src/bot/client.h
-    src/bot/client.cpp
-    src/bot/manager.h
-    src/bot/manager.cpp
-)
-
-target_include_directories(bot PUBLIC src)
-target_link_libraries(bot PUBLIC CURL::libcurl nlohmann_json::nlohmann_json engine)
-
 # UCI engine executable
 add_executable(chess-engine src/main.cpp)
 target_link_libraries(chess-engine PRIVATE engine)
-
-# Bot executable
-add_executable(chess-bot src/bot_main.cpp)
-target_link_libraries(chess-bot PRIVATE bot engine)
 
 # Tests
 enable_testing()
@@ -84,7 +66,3 @@ add_test(NAME search COMMAND test_search)
 add_executable(test_book test/test_book.cpp)
 target_link_libraries(test_book PRIVATE engine)
 add_test(NAME book COMMAND test_book)
-
-add_executable(test_bot test/test_bot.cpp)
-target_link_libraries(test_bot PRIVATE engine)
-add_test(NAME bot COMMAND test_bot)

@@ -10,9 +10,8 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(sysctl -n hw.ncpu)  # Linux: use $(nproc)
 ```
 
-Produces two executables:
+Produces one executable:
 - `chess-engine` — UCI engine (stdin/stdout protocol)
-- `chess-bot` — Lichess bot (connects automatically, reads token from `.lichess.key`, `LICHESS_TOKEN` env, or `--token` flag)
 
 ## Test
 
@@ -39,7 +38,7 @@ clang-tidy src/**/*.cpp -- -std=c++17 -I src
   - Constants/enums: `UPPER_SNAKE_CASE`
 - **Memory**: Prefer stack allocation and RAII. Avoid raw `new`/`delete`.
 - **Logging**: Use `std::cerr` for engine debug output (UCI dictates stderr for info). Use `std::cout` only for UCI responses.
-- **Dependencies**: Keep external deps minimal — libcurl, nlohmann/json (header-only). All other code is in-repo.
+- **Dependencies**: Keep external deps minimal — nlohmann/json (header-only). All other code is in-repo.
 - **No exceptions**: Use return codes / `std::optional` for error handling.
 - **Testing**: Unit tests go in `test/` matching `src/` structure. Use simple assert-based tests (no test framework dependency).
 
@@ -49,31 +48,15 @@ clang-tidy src/**/*.cpp -- -std=c++17 -I src
 
 ## Project Goal
 
-A C++ chess engine that plays as a bot on Lichess.org via the Bot API. The engine core is built from scratch (bitboard representation, alpha-beta search, UCI protocol). A bot client layer handles the Lichess REST API and NDJSON streaming for event/game streams.
+A C++ chess engine built from scratch (bitboard representation, alpha-beta search, UCI protocol).
 
-## Bot Debugging
+## Opening Book
 
-```bash
-# Run bot with verbose output: HTTP requests, stream events, search info
-./build/chess-bot --debug
+The engine supports Polyglot (.bin) opening books. Use UCI setoption:
 
-# Challenge a specific bot
-./build/chess-bot --challenge SomeBotName
-
-# Challenge random online bots
-./build/chess-bot --challenge-bots 3
-
-# Run bot with an opening book
-./build/chess-bot --book books/gm2001.bin --debug
-
-# Disable auto-resign/draw (useful for testing search strength)
-./build/chess-bot --no-resign --no-draw --debug
-
-# Custom resign threshold (resign only when losing 12+ pawns)
-./build/chess-bot --resign-threshold -1200
-
-# Custom draw threshold (offer/accept draw when eval within 50cp)
-./build/chess-bot --draw-threshold 50
+```
+setoption name OwnBook value true
+setoption name Book File value books/gm2001.bin
 ```
 
 ## SPRT Regression Testing
@@ -95,11 +78,10 @@ Environment variables: `TC`, `ROUNDS`, `GAMES`, `SPRT`, `CONCURRENCY`, `STARTUP_
 
 ## Runtime Deployment
 
-Set up a fully-configured lichess-bot deployment with a single script:
+Set up a fully-configured lichess-bot deployment with a single script (uses the official lichess-bot client):
 
 ```bash
 ./scripts/setup-lichess-bot-runtime.sh /path/to/deployment
 ```
 
 This builds the engine, clones lichess-bot, creates a Python venv, writes `config.yml`, and validates UCI startup.
-```
