@@ -81,10 +81,10 @@ Recently fixed review items:
 - Opening-book probing respects `searchmoves`, skips analysis-style searches, and validates book moves.
 - En-passant FEN and hashing are normalized so non-capturable EP targets can round-trip without splitting TT/repetition keys.
 - `Ponder` is not advertised until true ponder continuation is implemented.
+- Quiescence search uses dedicated noisy-move generation for legal captures, en-passant captures, and promotions outside check.
 
 High-value strength/performance work:
 
-- Dedicated noisy-move generation for quiescence.
 - Check/pin-aware legal move generation.
 - Incremental eval, pawn hash, and eval cache.
 - Optional Syzygy probing, NNUE experiments, and eventually SMP/`Threads`.
