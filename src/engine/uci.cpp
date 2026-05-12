@@ -157,7 +157,10 @@ void UCI::handlePosition(const std::string& line) {
         // Read 6 tokens: placement, stm, castle, ep, half, full
         for (int i = 0; i < 6; i++) {
             std::string token;
-            ss >> token;
+            if (!(ss >> token)) {
+                std::cerr << "[uci] illegal fen: " << fen << std::endl;
+                return;
+            }
             if (!fen.empty()) fen += ' ';
             fen += token;
         }
@@ -165,6 +168,9 @@ void UCI::handlePosition(const std::string& line) {
             std::cerr << "[uci] illegal fen: " << fen << std::endl;
             return;
         }
+    } else {
+        std::cerr << "[uci] illegal position: " << posType << std::endl;
+        return;
     }
 
     // Parse moves

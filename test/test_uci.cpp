@@ -161,6 +161,29 @@ void test_invalidFenDoesNotReplaceCurrentPosition() {
     CHECK(!contains(output, "bestmove 0000"));
 }
 
+void test_incompleteFenDoesNotReplaceCurrentPosition() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "position fen 8/8/8/8/8/8/8/8 w - -\n"
+        "go depth 1\n",
+        "1");
+
+    CHECK(contains(output, "[uci] illegal fen: 8/8/8/8/8/8/8/8 w - -"));
+    CHECK(!contains(output, "bestmove 0000"));
+}
+
+void test_unknownPositionTypeDoesNotMutateBoard() {
+    std::string output = runEngine(
+        "position startpos\n"
+        "position typo moves e2e4\n"
+        "isready\n"
+        "quit\n");
+
+    CHECK(contains(output, "[uci] illegal position: typo"));
+    CHECK(!contains(output, "[uci] illegal move:"));
+    CHECK(contains(output, "readyok"));
+}
+
 int main() {
     std::cout << "Running UCI tests:" << std::endl;
     RUN_TEST(rejectsInvalidCoordinates);
@@ -171,6 +194,8 @@ int main() {
     RUN_TEST(mateScoresUseUciMateFormat);
     RUN_TEST(repetitionIsScoredAsDraw);
     RUN_TEST(invalidFenDoesNotReplaceCurrentPosition);
+    RUN_TEST(incompleteFenDoesNotReplaceCurrentPosition);
+    RUN_TEST(unknownPositionTypeDoesNotMutateBoard);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;
