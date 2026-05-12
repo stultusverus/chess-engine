@@ -40,7 +40,8 @@ SearchResult Search::search(const Board& board, int maxDepth) {
 
     startTime_ = std::chrono::steady_clock::now();
 
-    for (int depth = 1; depth <= maxDepth && depth < MAX_PLY - 20 && !stop_.load(); depth++) {
+    for (int depth = 1; depth <= maxDepth && depth < MAX_PLY - 20; depth++) {
+        if (stop_.load() && depth > 1) break;
         int alpha = -INF;
         int beta = INF;
 
@@ -82,6 +83,7 @@ SearchResult Search::search(const Board& board, int maxDepth) {
 
 int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     if (stop_.load()) return 0;
+    if (ply >= MAX_PLY - 1) return quiesce(board, alpha, beta, ply);
     nodes_++;
     if (nodes_ >= nodesLimit_) {
         nodesLimit_ += 1024;
@@ -287,8 +289,10 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
         }
     }
 
-    if (inCheck && searchMoves.size() == 0)
-        return -MATE + ply;
+    if (searchMoves.size() == 0) {
+        if (inCheck) return -MATE + ply;
+        return moves.size() == 0 ? 0 : alpha;
+    }
 
     sortMoves(searchMoves, board, ply);
 
@@ -330,9 +334,9 @@ int Search::scoreMove(const Board& board, Move m, int ply) const {
         score = 90000 + Eval::pieceValue(m.promotion);
     } else {
         int packed = m.from | (m.to << 6);
-        if (packed == killer1_[ply])
+        if (ply < MAX_PLY && packed == killer1_[ply])
             score = KILLER_SCORE;
-        else if (packed == killer2_[ply])
+        else if (ply < MAX_PLY && packed == killer2_[ply])
             score = KILLER_SCORE - 1;
         if (score == 0)
             score = history_[m.from][m.to];
@@ -354,6 +358,7 @@ void Search::ageHistory() {
 }
 
 void Search::updateKiller(Move m, int ply) {
+    if (ply < 0 || ply >= MAX_PLY) return;
     int packed = m.from | (m.to << 6);
     if (packed != killer1_[ply]) {
         killer2_[ply] = killer1_[ply];

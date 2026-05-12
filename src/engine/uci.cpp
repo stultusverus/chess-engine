@@ -223,6 +223,11 @@ void UCI::handleGo(const std::string& line) {
 
     // Calculate time
     int timeMs = 0;
+    int availableTime = 0;
+    if (wtime > 0 || btime > 0) {
+        availableTime = (board_.sideToMove() == WHITE) ? wtime : btime;
+    }
+
     if (infinite) {
         search_.setInfinite(true);
     } else if (movetime > 0) {
@@ -234,7 +239,6 @@ void UCI::handleGo(const std::string& line) {
         timeMs = myTime / movestogo + myInc;
         // Safety margin
         if (timeMs > myTime / 2) timeMs = myTime / 2;
-        if (timeMs < 10) timeMs = 10;
     } else if (depth > 0) {
         timeMs = 999999; // Effectively infinite for depth mode
     } else {
@@ -242,7 +246,14 @@ void UCI::handleGo(const std::string& line) {
     }
 
     if (timeMs > 0 && moveOverheadMs_ > 0) {
-        timeMs = std::max(10, timeMs - moveOverheadMs_);
+        timeMs = std::max(0, timeMs - moveOverheadMs_);
+    }
+    if (!infinite && availableTime > 0) {
+        int hardCap = std::max(0, availableTime - moveOverheadMs_);
+        timeMs = std::min(timeMs, hardCap);
+    }
+    if (!infinite && timeMs <= 0) {
+        timeMs = 1;
     }
     if (!infinite) {
         search_.setTimeMs(timeMs);
@@ -258,7 +269,7 @@ void UCI::handleGo(const std::string& line) {
         }
     }
 
-    int maxDepth = depth > 0 ? depth : 64;
+    int maxDepth = (infinite && depth <= 0) ? MAX_PLY : (depth > 0 ? depth : 64);
     Board searchBoard = board_;
     bool showWdl = showWdl_;
     searchRunning_.store(true);
