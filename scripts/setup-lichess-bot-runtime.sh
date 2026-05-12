@@ -123,16 +123,16 @@ engine:
       standard:
         - "${BOOK_DST}"
     min_weight: 1
-    selection: "weighted_random"
+    selection: "best_move"
     max_depth: 20
     normalization: "none"
 
   draw_or_resign:
-    resign_enabled: false
-    resign_score: -1000
+    resign_enabled: true
+    resign_score: -1200
     resign_for_egtb_minus_two: true
     resign_moves: 3
-    offer_draw_enabled: true
+    offer_draw_enabled: false
     offer_draw_score: 0
     offer_draw_for_egtb_zero: true
     offer_draw_moves: 10
@@ -189,7 +189,7 @@ engine:
   homemade_options: {}
 
   uci_options:
-    Move Overhead: 0
+    Move Overhead: 100
     Hash: 512
     UCI_ShowWDL: true
 
@@ -223,9 +223,6 @@ challenge:
   variants:
     - standard
   time_controls:
-    - bullet
-    - blitz
-    - rapid
     - classical
   modes:
     - casual
