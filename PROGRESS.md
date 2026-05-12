@@ -52,7 +52,7 @@
 
 ## Performance Backlog
 
-- [ ] Replace pseudo-legal plus make/unmake legal generation with check/pin-aware move generation.
+- [x] Replace pseudo-legal plus make/unmake legal generation with check/pin-aware move generation.
 - [x] Add incremental material/PST state, pawn hash, and eval cache.
 - [ ] Improve search tuning: better LMR, reverse futility/razoring, continuation and capture history, depth-preferred TT replacement, and soft/hard time management.
 

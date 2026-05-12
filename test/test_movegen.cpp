@@ -219,6 +219,42 @@ void test_generateLegalNoisyMovesFiltersIllegalPinnedCaptures() {
     CHECK(findMove(moves, chess::E2, chess::E8) != nullptr);
 }
 
+void test_checkEvasionAllowsDoublePawnBlock() {
+    chess::MoveGenerator gen;
+    chess::MoveList moves;
+    chess::Board b("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
+
+    CHECK(b.isInCheck());
+    gen.generateMoves(b, moves);
+
+    CHECK(findMove(moves, chess::D2, chess::D4) != nullptr);
+}
+
+void test_enPassantCannotExposeHorizontalCheck() {
+    chess::MoveGenerator gen;
+    chess::MoveList moves;
+    chess::Board b("4k3/8/8/r2pP2K/8/8/8/8 w - d6 0 1");
+
+    gen.generateMoves(b, moves);
+
+    CHECK(findMove(moves, chess::E5, chess::D6) == nullptr);
+    CHECK(!b.isMoveLegal(chess::Move(chess::E5, chess::D6)));
+}
+
+void test_enPassantCanCaptureCheckingPawn() {
+    chess::MoveGenerator gen;
+    chess::MoveList moves;
+    chess::Board b("4k3/8/8/3pP3/4K3/8/8/8 w - d6 0 1");
+
+    CHECK(b.isInCheck());
+    gen.generateMoves(b, moves);
+
+    const chess::Move* epCapture = findMove(moves, chess::E5, chess::D6);
+    CHECK(epCapture != nullptr);
+    if (epCapture)
+        CHECK(epCapture->type == chess::EN_PASSANT);
+}
+
 void test_generateLegalNoisyMovesClearsOutputList() {
     chess::MoveGenerator gen;
     chess::MoveList moves;
@@ -258,6 +294,9 @@ int main() {
     RUN_TEST(generateMovesClearsOutputList);
     RUN_TEST(generateLegalNoisyMovesMatchesFilteredLegalMoves);
     RUN_TEST(generateLegalNoisyMovesFiltersIllegalPinnedCaptures);
+    RUN_TEST(checkEvasionAllowsDoublePawnBlock);
+    RUN_TEST(enPassantCannotExposeHorizontalCheck);
+    RUN_TEST(enPassantCanCaptureCheckingPawn);
     RUN_TEST(generateLegalNoisyMovesClearsOutputList);
     RUN_TEST(hasLegalMoveDetectsStalemate);
 
