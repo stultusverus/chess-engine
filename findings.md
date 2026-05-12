@@ -2,42 +2,45 @@
 
 Date: 2026-05-12
 
-## 1) Failing test: mate score is not reported in UCI `score mate` format
+## Resolved Findings
 
-- **Severity:** High
-- **Evidence:** `ctest --output-on-failure` fails `test_uci` in `test_mateScoresUseUciMateFormat` with:
-  - `FAIL: contains(output, "score mate ")`
-- **Impact:** UCI clients expect mate scores to be emitted as `score mate N`; incorrect formatting can break GUI interpretation and automated tooling.
-- **Likely cause:** The search result returned to UCI for a mating line is not crossing the mate threshold check in `emitSearchInfo`, so it is printed as centipawns instead of mate notation.
-- **Relevant code:**
-  - `src/engine/uci.cpp` (`emitSearchInfo` mate/cp selection)
-  - `src/engine/search.cpp` (mate score propagation and TT adjustments)
+## 1) UCI mate score regression was timing-sensitive in local/cloud runs
 
-## 2) UCI `position fen` parser does not validate token availability before building FEN
+- **Status:** Resolved in `f9b78c4` (`Stabilize UCI mate score test`)
+- **Previous severity:** High
+- **Previous evidence:** `test_uci` could fail in `test_mateScoresUseUciMateFormat` when the async search was stopped before completing the intended depth.
+- **Resolution:** The regression now searches a mate-in-one at depth 1 and gives the engine enough time to complete before `quit`, keeping the assertion focused on UCI `score mate N` formatting rather than host speed.
+- **Relevant code:** `test/test_uci.cpp`
 
-- **Severity:** Medium
-- **Evidence:** In `UCI::handlePosition`, the code always performs 6 extractions for FEN fields without checking stream state. Missing tokens can produce malformed/partial FEN strings before `setFen` is called.
-- **Impact:** Malformed command handling is fragile and can produce confusing diagnostics and edge-case behavior.
-- **Relevant code:** `src/engine/uci.cpp` (`handlePosition` loop that reads 6 tokens for FEN)
+## 2) UCI `position fen` parser did not validate token availability before building FEN
 
-## 3) `position` command accepts unknown position type silently
+- **Status:** Resolved in `1e3db28` (`Harden UCI position parsing`)
+- **Previous severity:** Medium
+- **Previous evidence:** `UCI::handlePosition` performed 6 extractions for FEN fields without checking stream state.
+- **Resolution:** Incomplete FEN commands now emit `[uci] illegal fen: <partial-fen>` and return before replacing the current board.
+- **Regression coverage:** `test_incompleteFenDoesNotReplaceCurrentPosition`
+- **Relevant code:** `src/engine/uci.cpp`, `test/test_uci.cpp`
 
-- **Severity:** Low
-- **Evidence:** `UCI::handlePosition` has explicit branches for `startpos` and `fen`, but no `else` error path when `posType` is something else. It then proceeds to parse move tokens anyway.
-- **Impact:** Non-compliant or typoed input can mutate game state unexpectedly (moves may be interpreted on the previous board state) instead of being rejected clearly.
-- **Relevant code:** `src/engine/uci.cpp` (`handlePosition` control flow)
+## 3) `position` command accepted unknown position type silently
 
-## What passed
+- **Status:** Resolved in `1e3db28` (`Harden UCI position parsing`)
+- **Previous severity:** Low
+- **Previous evidence:** Unknown position types could fall through into move parsing against the previous board.
+- **Resolution:** Unknown position types now emit `[uci] illegal position: <type>` and return without parsing moves or mutating the board.
+- **Regression coverage:** `test_unknownPositionTypeDoesNotMutateBoard`
+- **Relevant code:** `src/engine/uci.cpp`, `test/test_uci.cpp`
 
-- Build succeeded (`cmake`, `make`).
-- 5/6 tests passed (`board`, `movegen`, `eval`, `search`, `book`).
+## Current Test Status
 
-## Reproduction
+- Build succeeds (`cmake`, `make`).
+- 6/6 tests pass (`board`, `movegen`, `eval`, `search`, `book`, `uci`).
+
+## Verification
 
 ```bash
 mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+make -j2
 ctest --output-on-failure
 ```
 
@@ -47,7 +50,7 @@ Compared with the repository goals (competitive UCI engine + robust deployment/r
 
 1. **UCI protocol completeness for bot/GUI interoperability**
    - Missing `Ponder` option and `ponderhit` command handling.
-   - Limited diagnostics for malformed `position` input and unsupported command variants.
+   - Diagnostics for malformed `position` input are improved, but broader unsupported command diagnostics remain limited.
    - No richer principal variation output (single-move PV only) and no multi-PV mode.
 
 2. **Search robustness and tactical correctness safeguards**
@@ -69,17 +72,17 @@ Compared with the repository goals (competitive UCI engine + robust deployment/r
 
 ### Immediate (next 1–2 iterations)
 
-1. **Fix correctness blockers first**
-   - Resolve mate score UCI formatting failure and add a regression test explicitly asserting `score mate N` for both winning and losing mates.
-   - Harden `position` parser validation: reject unknown position types and incomplete FEN token sets with deterministic error output.
-
-2. **Stabilize testing and reproducibility**
+1. **Stabilize testing and reproducibility**
    - Add a CI workflow running `cmake`, `make`, and `ctest --output-on-failure` on Linux.
    - Add sanitizer build variants (ASan/UBSan) and run unit tests under them.
 
-3. **Clean dependency/runtime friction**
+2. **Clean dependency/runtime friction**
    - Remove or gate `nlohmann/json` fetch if unused.
    - Update SPRT script/docs to require/auto-detect a platform-compatible baseline engine.
+
+3. **Extend UCI regression coverage**
+   - Add a losing-mate `score mate -N` regression test.
+   - Add tests for malformed `go` numeric arguments and unsupported command variants if stricter diagnostics are desired.
 
 ### Near-term (next 3–6 iterations)
 
