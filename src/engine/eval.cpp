@@ -435,6 +435,7 @@ int Eval::kingSafety(const Board& board, int phase) const {
 
     // White king shield + attack weight
     Square wKing = board.kingSquare(WHITE);
+    if (wKing == SQ_NONE) return 0;
     {
         int kf = fileOf(wKing);
         int kr = rankOf(wKing);
@@ -498,6 +499,7 @@ int Eval::kingSafety(const Board& board, int phase) const {
 
     // Black king shield + attack weight
     Square bKing = board.kingSquare(BLACK);
+    if (bKing == SQ_NONE) return 0;
     {
         int kf = fileOf(bKing);
         int kr = rankOf(bKing);

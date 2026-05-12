@@ -472,6 +472,8 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
     // Reject friendly-piece captures
     if (mailbox_[move.to] != NO_PIECE && colorOf(mailbox_[move.to]) == us)
         return false;
+    if (mailbox_[move.to] != NO_PIECE && typeOf(mailbox_[move.to]) == KING)
+        return false;
 
     if ((move.type == CAPTURE || move.type == PROMOTION_CAPTURE) && mailbox_[move.to] == NO_PIECE)
         return false;

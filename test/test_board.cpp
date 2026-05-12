@@ -231,6 +231,16 @@ void test_kingInCheck() {
     CHECK(b.isInCheck());
 }
 
+void test_kingCaptureRejected() {
+    chess::Board b("4k3/8/8/8/4R3/8/8/4K3 w - - 0 1");
+    std::string start = b.fen();
+    chess::UndoInfo undo;
+
+    CHECK(!b.makeMove(chess::Move(chess::E4, chess::E8), undo));
+    CHECK(b.fen() == start);
+    CHECK(b.pieceOn(chess::E8) == chess::B_KING);
+}
+
 void test_enPassantCapture() {
     std::string fen = "rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3";
     chess::Board b(fen);
@@ -363,6 +373,7 @@ int main() {
     RUN_TEST(unmakeRestoresCountersAndHash);
     RUN_TEST(illegalSelfCheck);
     RUN_TEST(kingInCheck);
+    RUN_TEST(kingCaptureRejected);
     RUN_TEST(enPassantCapture);
     RUN_TEST(enPassantRequiresCapturedPawn);
     RUN_TEST(invalidFenFieldsRejected);
