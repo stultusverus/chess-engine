@@ -29,6 +29,22 @@ namespace {
         return df <= 1 && dr <= 1;
     }
 
+    bool hasEnPassantCapture(const std::array<Piece, 64>& mailbox, Color us, Square ep) {
+        if (ep == SQ_NONE) return false;
+
+        if (fileOf(ep) > FILE_A) {
+            Square attacker = Square(us == WHITE ? ep - 9 : ep + 7);
+            if (attacker >= A1 && attacker <= H8 && mailbox[attacker] == makePiece(us, PAWN))
+                return true;
+        }
+        if (fileOf(ep) < FILE_H) {
+            Square attacker = Square(us == WHITE ? ep - 7 : ep + 9);
+            if (attacker >= A1 && attacker <= H8 && mailbox[attacker] == makePiece(us, PAWN))
+                return true;
+        }
+        return false;
+    }
+
     uint64_t zobristPieces_[PIECE_NB][64];
     uint64_t zobristCastle_[16];
     uint64_t zobristEp_[8];
@@ -254,7 +270,8 @@ bool Board::setFen(const std::string& fen) {
     }
     if (stm_ == BLACK) hash_ ^= zobristSide_;
     hash_ ^= zobristCastle_[castle_];
-    if (ep_ != SQ_NONE) hash_ ^= zobristEp_[fileOf(ep_)];
+    if (ep_ != SQ_NONE && hasEnPassantCapture(mailbox_, stm_, ep_))
+        hash_ ^= zobristEp_[fileOf(ep_)];
 
     // Validate: must have exactly one king per side
     if (popcount(pieces(WHITE, KING)) != 1 || popcount(pieces(BLACK, KING)) != 1) {
@@ -288,24 +305,13 @@ bool Board::setFen(const std::string& fen) {
 
     if (ep_ != SQ_NONE) {
         Color us = stm_;
-        Square pawnSquare = Square(us == WHITE ? ep_ - 8 : ep_ + 8);
-        if (pawnSquare < A1 || pawnSquare > H8 || mailbox_[pawnSquare] != makePiece(~us, PAWN)) {
+        if (mailbox_[ep_] != NO_PIECE) {
             restoreOldState();
             return false;
         }
 
-        bool capturable = false;
-        if (fileOf(ep_) > FILE_A) {
-            Square attacker = Square(us == WHITE ? ep_ - 9 : ep_ + 7);
-            capturable = capturable || (attacker >= A1 && attacker <= H8 &&
-                                        mailbox_[attacker] == makePiece(us, PAWN));
-        }
-        if (fileOf(ep_) < FILE_H) {
-            Square attacker = Square(us == WHITE ? ep_ - 7 : ep_ + 9);
-            capturable = capturable || (attacker >= A1 && attacker <= H8 &&
-                                        mailbox_[attacker] == makePiece(us, PAWN));
-        }
-        if (!capturable) {
+        Square pawnSquare = Square(us == WHITE ? ep_ - 8 : ep_ + 8);
+        if (pawnSquare < A1 || pawnSquare > H8 || mailbox_[pawnSquare] != makePiece(~us, PAWN)) {
             restoreOldState();
             return false;
         }
@@ -391,6 +397,7 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
     if (p == NO_PIECE) return false;
     Color us = stm_;
     if (colorOf(p) != us) return false;
+    bool oldEpHasCapture = hasEnPassantCapture(mailbox_, us, ep_);
     PieceType pt = typeOf(p);
 
     bool promotionTarget = pt == PAWN && (rankOf(move.to) == RANK_8 || rankOf(move.to) == RANK_1);
@@ -571,8 +578,10 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
         ep_ = Square(us == WHITE ? move.from + 8 : move.from - 8);
     }
     if (oldEp != ep_) {
-        if (oldEp != SQ_NONE) hash_ ^= zobristEp_[fileOf(oldEp)];
-        if (ep_ != SQ_NONE)   hash_ ^= zobristEp_[fileOf(ep_)];
+        if (oldEp != SQ_NONE && oldEpHasCapture)
+            hash_ ^= zobristEp_[fileOf(oldEp)];
+        if (ep_ != SQ_NONE && hasEnPassantCapture(mailbox_, ~us, ep_))
+            hash_ ^= zobristEp_[fileOf(ep_)];
     }
 
     // Update half-move clock
@@ -656,8 +665,10 @@ void Board::makeNullMove(NullUndo& undo) {
     hash_ ^= zobristSide_;
     stm_ = ~stm_;
 
-    if (ep_ != SQ_NONE) {
+    if (ep_ != SQ_NONE && hasEnPassantCapture(mailbox_, stm_, ep_)) {
         hash_ ^= zobristEp_[fileOf(ep_)];
+    }
+    if (ep_ != SQ_NONE) {
         ep_ = SQ_NONE;
     }
 

@@ -58,6 +58,20 @@ static std::string runEngineWithDelayedInput(const std::string& firstInput,
     return runCommand(command);
 }
 
+static std::string runEngineWithTwoDelayedInputs(const std::string& firstInput,
+                                                 const std::string& secondInput,
+                                                 const std::string& thirdInput,
+                                                 const std::string& firstDelaySeconds = "0.1",
+                                                 const std::string& secondDelaySeconds = "0.1") {
+    std::string first = escapeForSingleQuotedPrintf(firstInput);
+    std::string second = escapeForSingleQuotedPrintf(secondInput);
+    std::string third = escapeForSingleQuotedPrintf(thirdInput);
+    std::string command = "{ printf '" + first + "'; sleep " + firstDelaySeconds +
+                          "; printf '" + second + "'; sleep " + secondDelaySeconds +
+                          "; printf '" + third + "'; } | ./chess-engine 2>&1";
+    return runCommand(command);
+}
+
 static int countOccurrences(const std::string& haystack, const std::string& needle) {
     int count = 0;
     std::string::size_type pos = 0;
@@ -82,6 +96,17 @@ static std::string scoreField(const std::string& infoLine) {
     std::string::size_type end = infoLine.find(" nodes", pos);
     if (end == std::string::npos) return infoLine.substr(pos);
     return infoLine.substr(pos, end - pos);
+}
+
+static std::string firstPvMoveForMultiPv(const std::string& output, int multiPv) {
+    std::string marker = " multipv " + std::to_string(multiPv) + " ";
+    std::string::size_type pos = output.find(marker);
+    if (pos == std::string::npos) return "";
+    pos = output.find(" pv ", pos);
+    if (pos == std::string::npos) return "";
+    pos += 4;
+    std::string::size_type end = output.find_first_of(" \n", pos);
+    return output.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
 }
 
 static bool contains(const std::string& haystack, const std::string& needle) {
@@ -192,6 +217,30 @@ void test_goSearchMovesRestrictsRootMove() {
     CHECK(contains(output, "bestmove e2e4"));
 }
 
+void test_searchMovesRestrictionSurvivesPreviousTTHit() {
+    std::string output = runEngineWithTwoDelayedInputs(
+        "position startpos\n"
+        "go depth 1\n",
+        "go depth 1 searchmoves e2e4\n",
+        "quit\n",
+        "0.2",
+        "0.2");
+
+    CHECK(contains(output, "bestmove e2e4"));
+}
+
+void test_bookMoveRespectsSearchMoves() {
+    std::string output = runEngineWithDelayedQuit(
+        "setoption name OwnBook value true\n"
+        "setoption name Book File value ../books/gm2001.bin\n"
+        "position startpos\n"
+        "go depth 1 searchmoves a2a3\n",
+        "0.2");
+
+    CHECK(!contains(output, "info string book move"));
+    CHECK(contains(output, "bestmove a2a3"));
+}
+
 void test_ponderHitReturnsBestMove() {
     std::string output = runEngineWithDelayedInput(
         "position startpos\n"
@@ -200,6 +249,12 @@ void test_ponderHitReturnsBestMove() {
         "0.1");
 
     CHECK(contains(output, "bestmove "));
+}
+
+void test_uciDoesNotAdvertisePonder() {
+    std::string output = runEngine("uci\nquit\n");
+    CHECK(!contains(output, "option name Ponder"));
+    CHECK(contains(output, "uciok"));
 }
 
 void test_multiPvReportsMultipleLines() {
@@ -211,6 +266,9 @@ void test_multiPvReportsMultipleLines() {
 
     CHECK(contains(output, "multipv 1"));
     CHECK(contains(output, "multipv 2"));
+    CHECK(firstPvMoveForMultiPv(output, 1) != "");
+    CHECK(firstPvMoveForMultiPv(output, 2) != "");
+    CHECK(firstPvMoveForMultiPv(output, 1) != firstPvMoveForMultiPv(output, 2));
     CHECK(contains(output, "bestmove "));
 }
 
@@ -270,7 +328,10 @@ int main() {
     RUN_TEST(goRejectsMalformedNumericValues);
     RUN_TEST(goNodesStopsAndReportsInfo);
     RUN_TEST(goSearchMovesRestrictsRootMove);
+    RUN_TEST(searchMovesRestrictionSurvivesPreviousTTHit);
+    RUN_TEST(bookMoveRespectsSearchMoves);
     RUN_TEST(ponderHitReturnsBestMove);
+    RUN_TEST(uciDoesNotAdvertisePonder);
     RUN_TEST(multiPvReportsMultipleLines);
     RUN_TEST(matedSideUsesUciMateFormat);
     RUN_TEST(invalidFenDoesNotReplaceCurrentPosition);

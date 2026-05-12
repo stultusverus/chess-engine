@@ -79,6 +79,20 @@ bool isGoKeyword(const std::string& token) {
     return isGoValueKeyword(token) || isGoFlagKeyword(token);
 }
 
+bool rootMoveMatches(Move allowed, Move move) {
+    return allowed.from == move.from && allowed.to == move.to &&
+           (allowed.promotion == PIECE_TYPE_NB || allowed.promotion == move.promotion);
+}
+
+bool moveAllowedByRootMoves(Move move, const std::vector<Move>& rootMoves) {
+    if (rootMoves.empty()) return true;
+    for (Move allowed : rootMoves) {
+        if (rootMoveMatches(allowed, move))
+            return true;
+    }
+    return false;
+}
+
 void emitSearchInfo(const SearchResult& result, bool showWdl, int multiPvIndex = 0) {
     std::cout << "info depth " << result.depth;
     if (multiPvIndex > 0)
@@ -149,7 +163,6 @@ void UCI::handleUci() {
     std::cout << "id author chess-engine" << std::endl;
     std::cout << "option name Hash type spin default 64 min 1 max 4096" << std::endl;
     std::cout << "option name Move Overhead type spin default 0 min 0 max 5000" << std::endl;
-    std::cout << "option name Ponder type check default false" << std::endl;
     std::cout << "option name MultiPV type spin default 1 min 1 max 4" << std::endl;
     std::cout << "option name OwnBook type check default false" << std::endl;
     std::cout << "option name Book File type string default <empty>" << std::endl;
@@ -243,6 +256,7 @@ void UCI::handleGo(const std::string& line) {
     uint64_t nodeLimit = 0;
     bool infinite = false;
     bool ponder = false;
+    bool unsupportedPonder = false;
     std::vector<Move> searchMoves;
 
     std::vector<std::string> tokens;
@@ -287,7 +301,10 @@ void UCI::handleGo(const std::string& line) {
         else if (token == "mate") readValue(i, token, mate);
         else if (token == "nodes") readUnsignedValue(i, token, nodeLimit);
         else if (token == "infinite") infinite = true;
-        else if (token == "ponder") ponder = true;
+        else if (token == "ponder") {
+            unsupportedPonder = true;
+            std::cerr << "[uci] unsupported go token: ponder" << std::endl;
+        }
         else if (token == "searchmoves") {
             while (i + 1 < tokens.size() && !isGoKeyword(tokens[i + 1])) {
                 std::string moveToken = tokens[++i];
@@ -332,10 +349,6 @@ void UCI::handleGo(const std::string& line) {
         availableTime = (board_.sideToMove() == WHITE) ? wtime : btime;
     }
 
-    if (ponder) {
-        infinite = true;
-    }
-
     if (nodeLimit > 0) {
         search_.setNodeLimit(nodeLimit);
     } else if (infinite) {
@@ -370,8 +383,18 @@ void UCI::handleGo(const std::string& line) {
     }
 
     // Probe opening book
-    if (bookEnabled_ && book_.isLoaded()) {
+    if (bookEnabled_ && book_.isLoaded() && !infinite && !unsupportedPonder && multiPv_ <= 1) {
         auto bookMove = book_.probe(board_);
+        if (bookMove && !moveAllowedByRootMoves(*bookMove, searchMoves)) {
+            bookMove.reset();
+        }
+        if (bookMove) {
+            Board bookBoard = board_;
+            UndoInfo undo;
+            if (!bookBoard.makeMove(*bookMove, undo)) {
+                bookMove.reset();
+            }
+        }
         if (bookMove) {
             std::cerr << "info string book move" << std::endl;
             std::cout << "bestmove " << moveToString(*bookMove) << std::endl;
@@ -514,10 +537,6 @@ void UCI::handleSetOption(const std::string& line) {
     } else if (name == "Move Overhead") {
         if (auto ms = parseInt(value)) {
             moveOverheadMs_ = std::clamp(*ms, 0, 5000);
-        }
-    } else if (name == "Ponder") {
-        if (auto enabled = parseBool(value)) {
-            ponderEnabled_ = *enabled;
         }
     } else if (name == "MultiPV") {
         if (auto count = parseInt(value)) {

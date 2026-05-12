@@ -218,21 +218,25 @@ void MoveGenerator::generateCastlingMoves(const Board& board, MoveList& moves) {
 }
 
 uint64_t MoveGenerator::perft(const Board& board, int depth) {
+    Board temp = board;
+    return perftMutable(temp, depth);
+}
+
+uint64_t MoveGenerator::perftMutable(Board& board, int depth) {
     if (depth == 0) return 1;
 
     MoveList moves;
-    Board legalBoard = board;
-    generateLegalMoves(legalBoard, moves);
+    generateLegalMoves(board, moves);
 
     if (depth == 1) return moves.size();
 
     uint64_t nodes = 0;
-    Board temp;
-    UndoInfo undo;
     for (const Move& m : moves) {
-        temp = board;
-        temp.makeMove(m, undo);
-        nodes += perft(temp, depth - 1);
+        UndoInfo undo;
+        if (!board.makeMove(m, undo))
+            continue;
+        nodes += perftMutable(board, depth - 1);
+        board.unmakeMove(m, undo);
     }
     return nodes;
 }

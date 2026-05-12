@@ -73,6 +73,22 @@ Run the lightweight in-repo benchmark target after building:
 ./bench_engine path/to/tactical.epd
 ```
 
+## Current Development Status
+
+Recently fixed review items:
+
+- Root `searchmoves` and serial `MultiPV` no longer return moves outside the restricted root set due to TT hits.
+- Opening-book probing respects `searchmoves`, skips analysis-style searches, and validates book moves.
+- En-passant FEN and hashing are normalized so non-capturable EP targets can round-trip without splitting TT/repetition keys.
+- `Ponder` is not advertised until true ponder continuation is implemented.
+
+High-value strength/performance work:
+
+- Dedicated noisy-move generation for quiescence.
+- Check/pin-aware legal move generation.
+- Incremental eval, pawn hash, and eval cache.
+- Optional Syzygy probing, NNUE experiments, and eventually SMP/`Threads`.
+
 ## SPRT
 
 SPRT (Sequential Probability Ratio Testing) regression tests compare the current build against a frozen baseline to detect strength regressions:

@@ -120,6 +120,7 @@ SearchResult Search::search(const Board& board, int maxDepth) {
 int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     if (stop_.load()) return 0;
     if (ply >= MAX_PLY - 1) return quiesce(board, alpha, beta, ply);
+    const bool restrictedRoot = ply == 0 && !rootMoves_.empty();
     nodes_++;
     if (nodes_ >= nodesLimit_) {
         nodesLimit_ += 1024;
@@ -147,7 +148,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         if (ttScore > MATE - MAX_PLY) ttScore -= ply;
         else if (ttScore < -MATE + MAX_PLY) ttScore += ply;
 
-        if (depth > 0 && ttEntry->depth >= depth) {
+        if (!restrictedRoot && depth > 0 && ttEntry->depth >= depth) {
             if (ttEntry->bound == static_cast<uint8_t>(Bound::EXACT)) {
                 if (ply == 0 && ttMove.from != SQ_NONE) bestMoveRoot_ = ttMove;
                 return ttScore;

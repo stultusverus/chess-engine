@@ -39,6 +39,7 @@ private:
     void generateQueenMoves(const Board& board, MoveList& moves);
     void generateKingMoves(const Board& board, MoveList& moves);
     void generateCastlingMoves(const Board& board, MoveList& moves);
+    uint64_t perftMutable(Board& board, int depth);
 };
 
 } // namespace chess

@@ -51,6 +51,21 @@ clang-tidy src/**/*.cpp -- -std=c++17 -I src
 
 A C++ chess engine built from scratch (bitboard representation, alpha-beta search, UCI protocol).
 
+## Recent Review Fixes
+
+The latest correctness review fixes are now part of the codebase and should remain covered by regression tests:
+
+- Root `searchmoves` and serial `MultiPV` are protected from transposition-table root hits returning moves outside the active root set.
+- Opening-book probing is filtered by `searchmoves`, disabled for analysis-style searches, and validates book moves before returning them.
+- En-passant FEN/hash handling accepts syntactically valid EP targets while hashing EP only when an EP capture is possible.
+- `Ponder` is no longer advertised until true ponder continuation is implemented.
+
+Current high-value performance work:
+
+- Add a dedicated noisy-move generator for quiescence instead of generating all legal moves and filtering.
+- Improve legal move generation with check/pin-aware generation.
+- Add incremental eval pieces such as material/PST state, pawn hash, and evaluation cache.
+
 ## Opening Book
 
 The engine supports Polyglot (.bin) opening books. Use UCI setoption:

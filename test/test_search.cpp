@@ -254,6 +254,20 @@ void test_rootMoveRestriction() {
     CHECK(result.bestMove.to == chess::E4);
 }
 
+void test_rootMoveRestrictionIgnoresRootTTHit() {
+    chess::Search search;
+    chess::Board b;
+    search.setInfinite(true);
+
+    auto unrestricted = search.search(b, 1);
+    CHECK(unrestricted.bestMove.from != chess::SQ_NONE);
+
+    search.setRootMoves({chess::Move(chess::E2, chess::E4)});
+    auto restricted = search.search(b, 1);
+    CHECK(restricted.bestMove.from == chess::E2);
+    CHECK(restricted.bestMove.to == chess::E4);
+}
+
 void test_nodeLimitStopsSearch() {
     chess::Search search;
     chess::Board b;
@@ -288,6 +302,7 @@ int main() {
     RUN_TEST(fiftyMoveRuleDraw);
     RUN_TEST(infoCallbackReportsPvAndMetrics);
     RUN_TEST(rootMoveRestriction);
+    RUN_TEST(rootMoveRestrictionIgnoresRootTTHit);
     RUN_TEST(nodeLimitStopsSearch);
 
     if (failures > 0) {

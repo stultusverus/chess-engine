@@ -31,14 +31,31 @@
 ## Phase 3 — Protocol, QA, and Performance
 
 - [x] Strict FEN validation — rejects malformed clocks, castling fields, impossible en-passant squares, adjacent kings, and invalid fullmove counters without mutating previous board state.
-- [x] Hardened UCI `go` parsing — validates numeric values, supports `nodes`, `searchmoves`, `mate`, `ponder`, `ponderhit`, and `movetime 0`.
+- [x] Hardened UCI `go` parsing — validates numeric values, supports `nodes`, `searchmoves`, `mate`, `infinite`, unsupported `ponder` diagnostics, and `movetime 0`.
 - [x] Search reporting — per-depth UCI info callbacks include score, WDL when enabled, nodes, time, nps, hashfull, and PV.
 - [x] Move generation/search path — search uses mutable make/unmake legality filtering instead of copying the board for each pseudo-legal move.
 - [x] MultiPV — UCI option supports up to four serial root lines for analysis GUIs.
 - [x] Benchmark target — `bench_engine` runs fixed perft/search metrics and optional EPD tactical checks.
 - [x] CI — GitHub Actions Release and Debug ASan/UBSan builds run `ctest --output-on-failure`.
+- [x] Perft recursion uses make/unmake instead of copying boards at every ply.
+
+## Current Review Findings
+
+- [x] Fix root TT interaction with `searchmoves` and serial MultiPV. TT hits no longer return a root move outside the active root restriction set.
+- [x] Make opening-book probing respect `searchmoves`, analysis mode, and MultiPV, and validate book moves before returning them.
+- [x] Normalize en-passant FEN/hash handling. Syntactically valid EP targets are accepted, but EP is hashed only when an EP capture is possible.
+- [x] Remove advertised `Ponder` support until true ponder continuation is implemented.
+- [x] Add regression tests for the above UCI/book/FEN edge cases.
+
+## Performance Backlog
+
+- [ ] Add dedicated noisy-move generation for quiescence.
+- [ ] Replace pseudo-legal plus make/unmake legal generation with check/pin-aware move generation.
+- [ ] Add incremental material/PST state, pawn hash, and eval cache.
+- [ ] Improve search tuning: real SEE, better LMR, reverse futility/razoring, continuation and capture history, depth-preferred TT replacement, and soft/hard time management.
 
 ## Strategic Backlog
 
 - [ ] Optional Syzygy probing behind compile/runtime configuration.
 - [ ] NNUE evaluation experiment after SPRT and tactical benchmark baselines are stable.
+- [ ] SMP search with UCI `Threads` after single-thread search behavior is stable.

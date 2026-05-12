@@ -285,6 +285,15 @@ void test_validEnPassantFenRequiresCapturablePawn() {
     CHECK(b.fen() == start);
 }
 
+void test_enPassantFenAllowsUncapturableTargetWithoutHashingIt() {
+    chess::Board withEp("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1");
+    chess::Board withoutEp("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
+
+    CHECK(withEp.enPassant() == chess::E3);
+    CHECK(withEp.fen() == "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1");
+    CHECK(withEp.hash() == withoutEp.hash());
+}
+
 void test_promotion() {
     std::string fen = "8/P7/8/8/8/8/8/k6K w - - 0 1";
     chess::Board b(fen);
@@ -358,6 +367,7 @@ int main() {
     RUN_TEST(enPassantRequiresCapturedPawn);
     RUN_TEST(invalidFenFieldsRejected);
     RUN_TEST(validEnPassantFenRequiresCapturablePawn);
+    RUN_TEST(enPassantFenAllowsUncapturableTargetWithoutHashingIt);
     RUN_TEST(promotion);
     RUN_TEST(invalidPromotionsRejected);
     RUN_TEST(malformedFenHandledSafely);
