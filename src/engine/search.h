@@ -6,6 +6,8 @@
 #include "tt.h"
 #include <atomic>
 #include <chrono>
+#include <functional>
+#include <vector>
 
 namespace chess {
 
@@ -19,6 +21,10 @@ struct SearchResult {
     int score;
     int depth;
     uint64_t nodes;
+    int timeMs = 0;
+    uint64_t nps = 0;
+    int hashFull = 0;
+    std::vector<Move> pv;
 };
 
 class Search {
@@ -27,6 +33,10 @@ public:
 
     void setTimeMs(int ms);
     void setInfinite(bool inf);
+    void setNodeLimit(uint64_t nodes);
+    void setRootMoves(const std::vector<Move>& moves);
+    void clearRootMoves();
+    void setInfoCallback(std::function<void(const SearchResult&)> callback);
     void setTTSize(int mb) { tt_.setSize(mb); }
     void clearTT() { tt_.clear(); }
     void stop();
@@ -40,6 +50,9 @@ private:
 
     int scoreMove(const Board& board, Move m, int ply) const;
     void sortMoves(MoveList& moves, const Board& board, int ply);
+    bool rootMoveAllowed(Move m) const;
+    std::vector<Move> extractPv(Board board, Move bestMove, int maxDepth) const;
+    int elapsedMs() const;
 
     void ageHistory();
     void updateKiller(Move m, int ply);
@@ -53,6 +66,7 @@ private:
     std::chrono::steady_clock::time_point startTime_{};
     uint64_t nodes_ = 0;
     uint64_t nodesLimit_ = 0;
+    uint64_t maxNodes_ = 0;
 
     // Move ordering
     static constexpr int KILLER_SCORE = 1000;
@@ -61,6 +75,9 @@ private:
     int killer2_[MAX_PLY]{};
     int history_[64][64]{};
     Move bestMoveRoot_;
+    Move ttMoveByPly_[MAX_PLY]{};
+    std::vector<Move> rootMoves_;
+    std::function<void(const SearchResult&)> infoCallback_;
 
     MoveGenerator gen_;
     Eval eval_;

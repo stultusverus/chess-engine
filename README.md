@@ -20,10 +20,9 @@ src/engine/               # Chess engine core
 
 ## Dependencies
 
-| Library | Purpose | Install |
-|---------|---------|---------|
+| Tool | Purpose | Install |
+|------|---------|---------|
 | CMake >= 3.16 | Build system | `brew install cmake` |
-| nlohmann/json | JSON parsing | auto-fetched by CMake |
 
 ## Quick Start
 
@@ -65,19 +64,28 @@ Or generate from a PGN database:
 polyglot make-book -pgn games.pgn -bin mybook.bin -max-ply 20
 ```
 
-## Benchmarking (SPRT)
+## Benchmarking
+
+Run the lightweight in-repo benchmark target after building:
+
+```bash
+./bench_engine
+./bench_engine path/to/tactical.epd
+```
+
+## SPRT
 
 SPRT (Sequential Probability Ratio Testing) regression tests compare the current build against a frozen baseline to detect strength regressions:
 
 ```bash
-# Default: 10+0.1s time control, all CPU cores
-./bench/run-fastchess-sprt.sh
+# Compare two versioned engine binaries under scripts/vers/
+./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
 
 # Custom parameters
-TC=5+0.05 ROUNDS=20000 CONCURRENCY=4 ./bench/run-fastchess-sprt.sh
+TC=5+0.05 ROUNDS=20000 CONCURRENCY=4 ./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
 ```
 
-Results are written to `bench/latest-vs-old.pgn` and `bench/latest-vs-old-config.json`.
+Results are written under `scripts/runs/<timestamp>-OLD_VERSION-vs-NEW_VERSION/`.
 
 Environment variables: `TC`, `ROUNDS`, `GAMES`, `SPRT`, `CONCURRENCY`, `STARTUP_MS`, `UCINEWGAME_MS`.
 

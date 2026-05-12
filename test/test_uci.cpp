@@ -48,6 +48,16 @@ static std::string runEngineWithDelayedQuit(const std::string& input, const std:
     return runCommand(command);
 }
 
+static std::string runEngineWithDelayedInput(const std::string& firstInput,
+                                             const std::string& delayedInput,
+                                             const std::string& delaySeconds = "0.1") {
+    std::string first = escapeForSingleQuotedPrintf(firstInput);
+    std::string delayed = escapeForSingleQuotedPrintf(delayedInput);
+    std::string command = "{ printf '" + first + "'; sleep " + delaySeconds +
+                          "; printf '" + delayed + "'; } | ./chess-engine 2>&1";
+    return runCommand(command);
+}
+
 static int countOccurrences(const std::string& haystack, const std::string& needle) {
     int count = 0;
     std::string::size_type pos = 0;
@@ -150,6 +160,70 @@ void test_repetitionIsScoredAsDraw() {
     CHECK(scoreField(lastInfoLine(output)) == "score cp 0");
 }
 
+void test_goRejectsMalformedNumericValues() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "go depth nope movetime 1\n",
+        "0.1");
+
+    CHECK(contains(output, "[uci] illegal go depth: nope"));
+    CHECK(contains(output, "bestmove "));
+}
+
+void test_goNodesStopsAndReportsInfo() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "go nodes 1\n",
+        "0.2");
+
+    CHECK(contains(output, "info depth "));
+    CHECK(contains(output, " nodes "));
+    CHECK(contains(output, " nps "));
+    CHECK(contains(output, " hashfull "));
+    CHECK(contains(output, "bestmove "));
+}
+
+void test_goSearchMovesRestrictsRootMove() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "go depth 1 searchmoves e2e4\n",
+        "0.2");
+
+    CHECK(contains(output, "bestmove e2e4"));
+}
+
+void test_ponderHitReturnsBestMove() {
+    std::string output = runEngineWithDelayedInput(
+        "position startpos\n"
+        "go ponder\n",
+        "ponderhit\nquit\n",
+        "0.1");
+
+    CHECK(contains(output, "bestmove "));
+}
+
+void test_multiPvReportsMultipleLines() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "setoption name MultiPV value 2\n"
+        "go depth 1\n",
+        "0.2");
+
+    CHECK(contains(output, "multipv 1"));
+    CHECK(contains(output, "multipv 2"));
+    CHECK(contains(output, "bestmove "));
+}
+
+void test_matedSideUsesUciMateFormat() {
+    std::string output = runEngineWithDelayedQuit(
+        "position fen 1k1R4/ppp5/8/8/8/8/PPP5/1K6 b - - 0 1\n"
+        "go depth 1\n",
+        "0.2");
+
+    CHECK(contains(output, "score mate "));
+    CHECK(!contains(output, "score cp -999"));
+}
+
 void test_invalidFenDoesNotReplaceCurrentPosition() {
     std::string output = runEngineWithDelayedQuit(
         "position startpos\n"
@@ -193,6 +267,12 @@ int main() {
     RUN_TEST(searchInfoEmittedOncePerCompletedGo);
     RUN_TEST(mateScoresUseUciMateFormat);
     RUN_TEST(repetitionIsScoredAsDraw);
+    RUN_TEST(goRejectsMalformedNumericValues);
+    RUN_TEST(goNodesStopsAndReportsInfo);
+    RUN_TEST(goSearchMovesRestrictsRootMove);
+    RUN_TEST(ponderHitReturnsBestMove);
+    RUN_TEST(multiPvReportsMultipleLines);
+    RUN_TEST(matedSideUsesUciMateFormat);
     RUN_TEST(invalidFenDoesNotReplaceCurrentPosition);
     RUN_TEST(incompleteFenDoesNotReplaceCurrentPosition);
     RUN_TEST(unknownPositionTypeDoesNotMutateBoard);

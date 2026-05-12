@@ -35,7 +35,7 @@ void test_startpos_perft() {
 // Kiwipete position (perft by Steven Edwards)
 void test_kiwipete_perft() {
     chess::MoveGenerator gen;
-    std::string fen = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 0";
+    std::string fen = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
     chess::Board b(fen);
     CHECK(gen.perft(b, 1) == 48);
     CHECK(gen.perft(b, 2) == 2039);
@@ -46,7 +46,7 @@ void test_kiwipete_perft() {
 // Position 3
 void test_pos3_perft() {
     chess::MoveGenerator gen;
-    std::string fen = "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 0";
+    std::string fen = "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1";
     chess::Board b(fen);
     CHECK(gen.perft(b, 1) == 14);
     CHECK(gen.perft(b, 2) == 191);
@@ -92,7 +92,7 @@ void test_pos6_perft() {
 
 void test_noCastlingWithoutRook() {
     chess::MoveGenerator gen;
-    chess::Board b("4k3/8/8/8/8/8/8/4K3 w K - 0 1");
+    chess::Board b("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
     chess::MoveList moves;
     gen.generateMoves(b, moves);
 

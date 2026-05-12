@@ -5,6 +5,7 @@
 #include "engine/types.h"
 #include <iostream>
 #include <chrono>
+#include <vector>
 
 static int failures = 0;
 #define CHECK(expr) do { if (!(expr)) { std::cerr << "FAIL: " << #expr << std::endl; failures++; } } while(0)
@@ -221,6 +222,48 @@ void test_fiftyMoveRuleDraw() {
     CHECK(result.score == 0);
 }
 
+void test_infoCallbackReportsPvAndMetrics() {
+    chess::Search search;
+    chess::Board b;
+    search.setInfinite(true);
+
+    int callbacks = 0;
+    chess::SearchResult last;
+    search.setInfoCallback([&](const chess::SearchResult& result) {
+        callbacks++;
+        last = result;
+    });
+
+    auto result = search.search(b, 2);
+    CHECK(callbacks == 2);
+    CHECK(last.depth == 2);
+    CHECK(last.nodes > 0);
+    CHECK(last.hashFull >= 0);
+    CHECK(!last.pv.empty());
+    CHECK(result.bestMove.from != chess::SQ_NONE);
+}
+
+void test_rootMoveRestriction() {
+    chess::Search search;
+    chess::Board b;
+    search.setInfinite(true);
+    search.setRootMoves({chess::Move(chess::E2, chess::E4)});
+
+    auto result = search.search(b, 1);
+    CHECK(result.bestMove.from == chess::E2);
+    CHECK(result.bestMove.to == chess::E4);
+}
+
+void test_nodeLimitStopsSearch() {
+    chess::Search search;
+    chess::Board b;
+    search.setNodeLimit(1);
+
+    auto result = search.search(b, 64);
+    CHECK(result.nodes > 0);
+    CHECK(result.depth < 64);
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -243,6 +286,9 @@ int main() {
     RUN_TEST(searchDepth5);
     RUN_TEST(nullMoveMateGuard);
     RUN_TEST(fiftyMoveRuleDraw);
+    RUN_TEST(infoCallbackReportsPvAndMetrics);
+    RUN_TEST(rootMoveRestriction);
+    RUN_TEST(nodeLimitStopsSearch);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

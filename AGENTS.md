@@ -10,8 +10,9 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(sysctl -n hw.ncpu)  # Linux: use $(nproc)
 ```
 
-Produces one executable:
+Produces two executables:
 - `chess-engine` — UCI engine (stdin/stdout protocol)
+- `bench_engine` — local perft/search/tactical benchmark runner
 
 ## Test
 
@@ -38,7 +39,7 @@ clang-tidy src/**/*.cpp -- -std=c++17 -I src
   - Constants/enums: `UPPER_SNAKE_CASE`
 - **Memory**: Prefer stack allocation and RAII. Avoid raw `new`/`delete`.
 - **Logging**: Use `std::cerr` for engine debug output (UCI dictates stderr for info). Use `std::cout` only for UCI responses.
-- **Dependencies**: Keep external deps minimal — nlohmann/json (header-only). All other code is in-repo.
+- **Dependencies**: Keep external deps minimal. Current engine code is in-repo plus the C++ standard library.
 - **No exceptions**: Use return codes / `std::optional` for error handling.
 - **Testing**: Unit tests go in `test/` matching `src/` structure. Use simple assert-based tests (no test framework dependency).
 
@@ -65,13 +66,13 @@ Compare current build against the frozen baseline for non-regression:
 
 ```bash
 # Default: 10+0.1s time control, all CPU cores
-./bench/run-fastchess-sprt.sh
+./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
 
 # Custom time control and rounds
-TC=5+0.05 ROUNDS=20000 ./bench/run-fastchess-sprt.sh
+TC=5+0.05 ROUNDS=20000 ./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
 
 # Lower concurrency
-CONCURRENCY=4 ./bench/run-fastchess-sprt.sh
+CONCURRENCY=4 ./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
 ```
 
 Environment variables: `TC`, `ROUNDS`, `GAMES`, `SPRT`, `CONCURRENCY`, `STARTUP_MS`.

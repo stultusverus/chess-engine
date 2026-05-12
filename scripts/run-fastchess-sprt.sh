@@ -18,6 +18,7 @@ startup_ms="${STARTUP_MS:-60000}"
 ucinewgame_ms="${UCINEWGAME_MS:-60000}"
 ping_ms="${PING_MS:-60000}"
 hash_mb="${HASH_MB:-64}"
+quiet_console="${QUIET_CONSOLE:-0}"
 
 usage() {
     cat >&2 <<EOF
@@ -37,7 +38,7 @@ Examples:
 Environment overrides:
   BOOKS_DIR, VERS_DIR, RUNS_DIR, OPENINGS
   TC, ROUNDS, GAMES, SPRT, DRAW, RESIGN
-  STARTUP_MS, UCINEWGAME_MS, PING_MS, HASH_MB, CONCURRENCY
+  STARTUP_MS, UCINEWGAME_MS, PING_MS, HASH_MB, CONCURRENCY, QUIET_CONSOLE
 EOF
 }
 
@@ -176,10 +177,16 @@ printf 'Command log:   %s\n' "${command_log}"
 printf 'FastChess log: %s\n' "${run_log}"
 printf 'PGN output:    %s\n' "${pgnout}"
 printf 'Config output: %s\n' "${configout}"
+printf 'Quiet console: %s\n' "${quiet_console}"
 printf 'Running:'
 printf ' %q' "${cmd[@]}"
 printf '\n'
 
 cd "${run_dir}"
-exec > >(tee -a "${run_log}") 2>&1
+if [[ "${quiet_console}" == "1" ]]; then
+    # Keep the full FastChess log, but drop verbose position dumps from the terminal.
+    exec > >(tee -a "${run_log}" | grep -Ev '^(Position;|Moves;)') 2>&1
+else
+    exec > >(tee -a "${run_log}") 2>&1
+fi
 exec "${cmd[@]}"

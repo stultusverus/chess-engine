@@ -2,7 +2,6 @@
 #include "board.h"
 #include <algorithm>
 #include <chrono>
-#include <iostream>
 
 namespace chess {
 
@@ -17,11 +16,32 @@ void Search::setTimeMs(int ms) {
     timeMs_ = ms;
     infinite_ = false;
     stop_.store(false);
+    maxNodes_ = 0;
 }
 
 void Search::setInfinite(bool inf) {
     infinite_ = inf;
     stop_.store(false);
+    maxNodes_ = 0;
+}
+
+void Search::setNodeLimit(uint64_t nodes) {
+    maxNodes_ = nodes;
+    timeMs_ = 0;
+    infinite_ = false;
+    stop_.store(false);
+}
+
+void Search::setRootMoves(const std::vector<Move>& moves) {
+    rootMoves_ = moves;
+}
+
+void Search::clearRootMoves() {
+    rootMoves_.clear();
+}
+
+void Search::setInfoCallback(std::function<void(const SearchResult&)> callback) {
+    infoCallback_ = std::move(callback);
 }
 
 void Search::stop() { stop_.store(true); }
@@ -36,9 +56,11 @@ SearchResult Search::search(const Board& board, int maxDepth) {
     nodes_ = 0;
     bestMoveRoot_ = Move();
     nodesLimit_ = 1024;
+    std::fill(std::begin(ttMoveByPly_), std::end(ttMoveByPly_), Move());
     ageHistory();
 
     startTime_ = std::chrono::steady_clock::now();
+    Board rootBoard = board;
 
     for (int depth = 1; depth <= maxDepth && depth < MAX_PLY - 20; depth++) {
         if (stop_.load() && depth > 1) break;
@@ -52,7 +74,7 @@ SearchResult Search::search(const Board& board, int maxDepth) {
 
         bool research = false;
         do {
-            int score = alphaBeta(const_cast<Board&>(board), depth, alpha, beta, 0);
+            int score = alphaBeta(rootBoard, depth, alpha, beta, 0);
             if (stop_.load()) break;
 
             if (score <= alpha) {
@@ -71,6 +93,15 @@ SearchResult Search::search(const Board& board, int maxDepth) {
 
         result.depth = depth;
         result.bestMove = bestMoveRoot_;
+        result.nodes = nodes_;
+        result.timeMs = elapsedMs();
+        result.nps = result.timeMs > 0 ? nodes_ * 1000ULL / static_cast<uint64_t>(result.timeMs) : nodes_;
+        result.hashFull = tt_.hashFull();
+        result.pv = extractPv(board, result.bestMove, depth);
+
+        if (infoCallback_) {
+            infoCallback_(result);
+        }
 
         if (shouldStop()) {
             break;
@@ -78,6 +109,11 @@ SearchResult Search::search(const Board& board, int maxDepth) {
     }
 
     result.nodes = nodes_;
+    result.timeMs = elapsedMs();
+    result.nps = result.timeMs > 0 ? nodes_ * 1000ULL / static_cast<uint64_t>(result.timeMs) : nodes_;
+    result.hashFull = tt_.hashFull();
+    if (result.pv.empty() && result.bestMove.from != SQ_NONE)
+        result.pv = extractPv(board, result.bestMove, result.depth);
     return result;
 }
 
@@ -100,9 +136,11 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     Move ttMove;
     int ttScore = 0;
     const int originalAlpha = alpha;
+    if (ply >= 0 && ply < MAX_PLY) ttMoveByPly_[ply] = Move();
 
     if (ttEntry) {
         ttMove = tt_.unpackMove(ttEntry->move);
+        if (ply >= 0 && ply < MAX_PLY) ttMoveByPly_[ply] = ttMove;
         ttScore = ttEntry->score;
 
         // Mate score adjustment
@@ -126,7 +164,10 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     if (depth >= 3 && ttMove.from == SQ_NONE) {
         alphaBeta(board, depth - 2, alpha, beta, ply);
         const TTEntry* newEntry = tt_.probe(hash);
-        if (newEntry) ttMove = tt_.unpackMove(newEntry->move);
+        if (newEntry) {
+            ttMove = tt_.unpackMove(newEntry->move);
+            if (ply >= 0 && ply < MAX_PLY) ttMoveByPly_[ply] = ttMove;
+        }
     }
 
     if (depth <= 0) return quiesce(board, alpha, beta, ply);
@@ -146,7 +187,16 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     }
 
     MoveList moves;
-    gen_.generateMoves(board, moves);
+    gen_.generateLegalMoves(board, moves);
+
+    if (ply == 0 && !rootMoves_.empty()) {
+        MoveList filtered;
+        for (const Move& m : moves) {
+            if (rootMoveAllowed(m))
+                filtered.add(m);
+        }
+        moves = filtered;
+    }
 
     bool inCheck = board.isInCheck();
     if (inCheck) depth++;
@@ -275,7 +325,7 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
     }
 
     MoveList moves;
-    gen_.generateMoves(board, moves);
+    gen_.generateLegalMoves(board, moves);
 
     MoveList searchMoves;
     if (inCheck) {
@@ -323,6 +373,14 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
 int Search::scoreMove(const Board& board, Move m, int ply) const {
     int score = 0;
 
+    if (ply >= 0 && ply < MAX_PLY) {
+        const Move& ttMove = ttMoveByPly_[ply];
+        if (ttMove.from == m.from && ttMove.to == m.to &&
+            (ttMove.promotion == PIECE_TYPE_NB || ttMove.promotion == m.promotion)) {
+            return 10000000;
+        }
+    }
+
     if (m.type == CAPTURE || m.type == PROMOTION_CAPTURE) {
         PieceType victim = typeOf(board.pieceOn(m.to));
         PieceType attacker = typeOf(board.pieceOn(m.from));
@@ -351,6 +409,41 @@ void Search::sortMoves(MoveList& moves, const Board& board, int ply) {
     });
 }
 
+bool Search::rootMoveAllowed(Move m) const {
+    for (const Move& allowed : rootMoves_) {
+        if (allowed.from == m.from && allowed.to == m.to &&
+            (allowed.promotion == PIECE_TYPE_NB || allowed.promotion == m.promotion)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<Move> Search::extractPv(Board board, Move bestMove, int maxDepth) const {
+    std::vector<Move> pv;
+    Move next = bestMove;
+
+    for (int i = 0; i < maxDepth && next.from != SQ_NONE && next.to != SQ_NONE; i++) {
+        UndoInfo undo;
+        if (!board.makeMove(next, undo))
+            break;
+
+        pv.push_back(undo.move);
+
+        const TTEntry* entry = tt_.probe(board.hash());
+        if (!entry)
+            break;
+        next = tt_.unpackMove(entry->move);
+    }
+
+    return pv;
+}
+
+int Search::elapsedMs() const {
+    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - startTime_).count());
+}
+
 void Search::ageHistory() {
     for (int i = 0; i < 64; i++)
         for (int j = 0; j < 64; j++)
@@ -374,6 +467,10 @@ void Search::updateHistory(Move m, int depth) {
 
 bool Search::shouldStop() {
     if (stop_.load()) return true;
+    if (maxNodes_ > 0 && nodes_ >= maxNodes_) {
+        stop_.store(true);
+        return true;
+    }
     if (!infinite_ && timeMs_ > 0) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - startTime_).count();

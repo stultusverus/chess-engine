@@ -65,8 +65,24 @@ Wdl approximateWdl(int score) {
     return {win, draw, decisive - win};
 }
 
-void emitSearchInfo(const SearchResult& result, bool showWdl) {
+bool isGoValueKeyword(const std::string& token) {
+    return token == "wtime" || token == "btime" || token == "winc" ||
+           token == "binc" || token == "movestogo" || token == "depth" ||
+           token == "movetime" || token == "nodes" || token == "mate";
+}
+
+bool isGoFlagKeyword(const std::string& token) {
+    return token == "infinite" || token == "ponder" || token == "searchmoves";
+}
+
+bool isGoKeyword(const std::string& token) {
+    return isGoValueKeyword(token) || isGoFlagKeyword(token);
+}
+
+void emitSearchInfo(const SearchResult& result, bool showWdl, int multiPvIndex = 0) {
     std::cout << "info depth " << result.depth;
+    if (multiPvIndex > 0)
+        std::cout << " multipv " << multiPvIndex;
 
     if (std::abs(result.score) > MATE - MAX_PLY) {
         int plies = MATE - std::abs(result.score);
@@ -82,8 +98,15 @@ void emitSearchInfo(const SearchResult& result, bool showWdl) {
         std::cout << " wdl " << wdl.win << ' ' << wdl.draw << ' ' << wdl.loss;
     }
 
-    std::cout << " nodes " << result.nodes;
-    if (result.bestMove.from != SQ_NONE && result.bestMove.to != SQ_NONE) {
+    std::cout << " nodes " << result.nodes
+              << " time " << result.timeMs
+              << " nps " << result.nps
+              << " hashfull " << result.hashFull;
+    if (!result.pv.empty()) {
+        std::cout << " pv";
+        for (Move move : result.pv)
+            std::cout << ' ' << moveToString(move);
+    } else if (result.bestMove.from != SQ_NONE && result.bestMove.to != SQ_NONE) {
         std::cout << " pv " << moveToString(result.bestMove);
     }
     std::cout << std::endl;
@@ -115,6 +138,7 @@ void UCI::loop() {
         else if (cmd == "position") handlePosition(line);
         else if (cmd == "go")       handleGo(line);
         else if (cmd == "stop")     handleStop();
+        else if (cmd == "ponderhit") handlePonderHit();
         else if (cmd == "quit")     { stopSearch(); break; }
         else if (cmd == "setoption") handleSetOption(line);
     }
@@ -125,6 +149,8 @@ void UCI::handleUci() {
     std::cout << "id author chess-engine" << std::endl;
     std::cout << "option name Hash type spin default 64 min 1 max 4096" << std::endl;
     std::cout << "option name Move Overhead type spin default 0 min 0 max 5000" << std::endl;
+    std::cout << "option name Ponder type check default false" << std::endl;
+    std::cout << "option name MultiPV type spin default 1 min 1 max 4" << std::endl;
     std::cout << "option name OwnBook type check default false" << std::endl;
     std::cout << "option name Book File type string default <empty>" << std::endl;
     std::cout << "option name UCI_ShowWDL type check default false" << std::endl;
@@ -213,19 +239,91 @@ void UCI::handleGo(const std::string& line) {
     ss >> cmd; // "go"
 
     int wtime = 0, btime = 0, winc = 0, binc = 0;
-    int movestogo = 0, depth = 0, movetime = 0;
+    int movestogo = 0, depth = 0, movetime = 0, mate = 0;
+    uint64_t nodeLimit = 0;
     bool infinite = false;
+    bool ponder = false;
+    std::vector<Move> searchMoves;
 
-    while (ss >> token) {
-        if (token == "wtime")       ss >> wtime;
-        else if (token == "btime")  ss >> btime;
-        else if (token == "winc")   ss >> winc;
-        else if (token == "binc")   ss >> binc;
-        else if (token == "movestogo") ss >> movestogo;
-        else if (token == "depth")  ss >> depth;
-        else if (token == "movetime") ss >> movetime;
+    std::vector<std::string> tokens;
+    while (ss >> token)
+        tokens.push_back(token);
+
+    auto readValue = [&](size_t& i, const std::string& name, int& target) {
+        if (i + 1 >= tokens.size()) {
+            std::cerr << "[uci] illegal go " << name << ": missing value" << std::endl;
+            return;
+        }
+        auto value = parseInt(tokens[++i]);
+        if (!value) {
+            std::cerr << "[uci] illegal go " << name << ": " << tokens[i] << std::endl;
+            return;
+        }
+        target = *value;
+    };
+
+    auto readUnsignedValue = [&](size_t& i, const std::string& name, uint64_t& target) {
+        if (i + 1 >= tokens.size()) {
+            std::cerr << "[uci] illegal go " << name << ": missing value" << std::endl;
+            return;
+        }
+        auto value = parseInt(tokens[++i]);
+        if (!value || *value < 0) {
+            std::cerr << "[uci] illegal go " << name << ": " << tokens[i] << std::endl;
+            return;
+        }
+        target = static_cast<uint64_t>(*value);
+    };
+
+    for (size_t i = 0; i < tokens.size(); i++) {
+        token = tokens[i];
+        if (token == "wtime") readValue(i, token, wtime);
+        else if (token == "btime") readValue(i, token, btime);
+        else if (token == "winc") readValue(i, token, winc);
+        else if (token == "binc") readValue(i, token, binc);
+        else if (token == "movestogo") readValue(i, token, movestogo);
+        else if (token == "depth") readValue(i, token, depth);
+        else if (token == "movetime") readValue(i, token, movetime);
+        else if (token == "mate") readValue(i, token, mate);
+        else if (token == "nodes") readUnsignedValue(i, token, nodeLimit);
         else if (token == "infinite") infinite = true;
+        else if (token == "ponder") ponder = true;
+        else if (token == "searchmoves") {
+            while (i + 1 < tokens.size() && !isGoKeyword(tokens[i + 1])) {
+                std::string moveToken = tokens[++i];
+                if (moveToken.size() != 4 && moveToken.size() != 5) {
+                    std::cerr << "[uci] illegal go searchmoves: " << moveToken << std::endl;
+                    continue;
+                }
+                Square from = stringToSquare(moveToken.substr(0, 2));
+                Square to = stringToSquare(moveToken.substr(2, 2));
+                if (from == SQ_NONE || to == SQ_NONE) {
+                    std::cerr << "[uci] illegal go searchmoves: " << moveToken << std::endl;
+                    continue;
+                }
+                PieceType promo = PIECE_TYPE_NB;
+                if (moveToken.size() == 5) {
+                    promo = charToPieceType(moveToken[4]);
+                    if (promo == PIECE_TYPE_NB) {
+                        std::cerr << "[uci] illegal go searchmoves: " << moveToken << std::endl;
+                        continue;
+                    }
+                }
+                searchMoves.emplace_back(from, to, promo);
+            }
+        } else {
+            std::cerr << "[uci] unsupported go token: " << token << std::endl;
+        }
     }
+
+    if (depth < 0) depth = 0;
+    if (mate < 0) mate = 0;
+    if (movestogo < 0) movestogo = 0;
+    wtime = std::max(0, wtime);
+    btime = std::max(0, btime);
+    winc = std::max(0, winc);
+    binc = std::max(0, binc);
+    movetime = std::max(0, movetime);
 
     // Calculate time
     int timeMs = 0;
@@ -234,10 +332,16 @@ void UCI::handleGo(const std::string& line) {
         availableTime = (board_.sideToMove() == WHITE) ? wtime : btime;
     }
 
-    if (infinite) {
+    if (ponder) {
+        infinite = true;
+    }
+
+    if (nodeLimit > 0) {
+        search_.setNodeLimit(nodeLimit);
+    } else if (infinite) {
         search_.setInfinite(true);
-    } else if (movetime > 0) {
-        timeMs = movetime;
+    } else if (movetime >= 0 && std::find(tokens.begin(), tokens.end(), "movetime") != tokens.end()) {
+        timeMs = std::max(1, movetime);
     } else if (wtime > 0 || btime > 0) {
         int myTime = (board_.sideToMove() == WHITE) ? wtime : btime;
         int myInc = (board_.sideToMove() == WHITE) ? winc : binc;
@@ -245,23 +349,23 @@ void UCI::handleGo(const std::string& line) {
         timeMs = myTime / movestogo + myInc;
         // Safety margin
         if (timeMs > myTime / 2) timeMs = myTime / 2;
-    } else if (depth > 0) {
-        timeMs = 999999; // Effectively infinite for depth mode
+    } else if (depth > 0 || mate > 0) {
+        search_.setInfinite(true);
     } else {
         timeMs = 3000; // Default
     }
 
-    if (timeMs > 0 && moveOverheadMs_ > 0) {
+    if (nodeLimit == 0 && !infinite && timeMs > 0 && moveOverheadMs_ > 0) {
         timeMs = std::max(0, timeMs - moveOverheadMs_);
     }
-    if (!infinite && availableTime > 0) {
+    if (nodeLimit == 0 && !infinite && availableTime > 0) {
         int hardCap = std::max(0, availableTime - moveOverheadMs_);
         timeMs = std::min(timeMs, hardCap);
     }
-    if (!infinite && timeMs <= 0) {
+    if (nodeLimit == 0 && !infinite && timeMs <= 0) {
         timeMs = 1;
     }
-    if (!infinite) {
+    if (nodeLimit == 0 && !infinite) {
         search_.setTimeMs(timeMs);
     }
 
@@ -275,13 +379,65 @@ void UCI::handleGo(const std::string& line) {
         }
     }
 
+    if (mate > 0 && depth <= 0)
+        depth = mate * 2 - 1;
     int maxDepth = (infinite && depth <= 0) ? MAX_PLY : (depth > 0 ? depth : 64);
     Board searchBoard = board_;
     bool showWdl = showWdl_;
+    int multiPv = multiPv_;
+    pondering_.store(ponder);
+    search_.setRootMoves(searchMoves);
+    if (multiPv <= 1) {
+        search_.setInfoCallback([showWdl](const SearchResult& result) {
+            emitSearchInfo(result, showWdl);
+        });
+    } else {
+        search_.setInfoCallback(nullptr);
+    }
     searchRunning_.store(true);
-    searchThread_ = std::thread([this, searchBoard, maxDepth, showWdl]() mutable {
-        SearchResult result = search_.search(searchBoard, maxDepth);
-        if (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE) {
+    bool hasRootMoves = !searchMoves.empty();
+    searchThread_ = std::thread([this, searchBoard, maxDepth, hasRootMoves, showWdl, multiPv, searchMoves]() mutable {
+        SearchResult result{};
+        if (multiPv <= 1) {
+            result = search_.search(searchBoard, maxDepth);
+        } else {
+            MoveList legalMoves;
+            MoveGenerator gen;
+            Board legalBoard = searchBoard;
+            gen.generateLegalMoves(legalBoard, legalMoves);
+
+            std::vector<Move> remaining;
+            for (const Move& move : legalMoves) {
+                if (!hasRootMoves) {
+                    remaining.push_back(move);
+                } else {
+                    for (const Move& allowed : searchMoves) {
+                        if (allowed.from == move.from && allowed.to == move.to &&
+                            (allowed.promotion == PIECE_TYPE_NB || allowed.promotion == move.promotion)) {
+                            remaining.push_back(move);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            int lines = std::min(multiPv, static_cast<int>(remaining.size()));
+            for (int line = 1; line <= lines && !remaining.empty(); line++) {
+                search_.setRootMoves(remaining);
+                SearchResult lineResult = search_.search(searchBoard, maxDepth);
+                emitSearchInfo(lineResult, showWdl, line);
+                if (line == 1)
+                    result = lineResult;
+
+                remaining.erase(std::remove_if(remaining.begin(), remaining.end(),
+                    [&](Move move) {
+                        return move.from == lineResult.bestMove.from &&
+                               move.to == lineResult.bestMove.to &&
+                               move.promotion == lineResult.bestMove.promotion;
+                    }), remaining.end());
+            }
+        }
+        if (!hasRootMoves && (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE)) {
             MoveList moves;
             MoveGenerator gen;
             gen.generateMoves(searchBoard, moves);
@@ -290,12 +446,14 @@ void UCI::handleGo(const std::string& line) {
             }
         }
 
-        emitSearchInfo(result, showWdl);
         if (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE) {
             std::cout << "bestmove 0000" << std::endl;
         } else {
             std::cout << "bestmove " << moveToString(result.bestMove) << std::endl;
         }
+        search_.clearRootMoves();
+        search_.setInfoCallback(nullptr);
+        pondering_.store(false);
         searchRunning_.store(false);
     });
 }
@@ -304,11 +462,19 @@ void UCI::handleStop() {
     stopSearch();
 }
 
+void UCI::handlePonderHit() {
+    if (pondering_.load()) {
+        pondering_.store(false);
+        stopSearch();
+    }
+}
+
 void UCI::stopSearch() {
     search_.stop();
     if (searchThread_.joinable()) {
         searchThread_.join();
     }
+    pondering_.store(false);
     searchRunning_.store(false);
 }
 
@@ -348,6 +514,14 @@ void UCI::handleSetOption(const std::string& line) {
     } else if (name == "Move Overhead") {
         if (auto ms = parseInt(value)) {
             moveOverheadMs_ = std::clamp(*ms, 0, 5000);
+        }
+    } else if (name == "Ponder") {
+        if (auto enabled = parseBool(value)) {
+            ponderEnabled_ = *enabled;
+        }
+    } else if (name == "MultiPV") {
+        if (auto count = parseInt(value)) {
+            multiPv_ = std::clamp(*count, 1, 4);
         }
     } else if (name == "OwnBook") {
         if (auto enabled = parseBool(value)) {

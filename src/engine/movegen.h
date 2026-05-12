@@ -28,6 +28,7 @@ private:
 class MoveGenerator {
 public:
     void generateMoves(const Board& board, MoveList& moves);
+    void generateLegalMoves(Board& board, MoveList& moves);
     uint64_t perft(const Board& board, int depth);
 
 private:

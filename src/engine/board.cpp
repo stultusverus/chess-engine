@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <climits>
 #include <cstdlib>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <cctype>
@@ -12,14 +13,20 @@ namespace chess {
 
 // --- Zobrist keys ---
 namespace {
-    int safeParseInt(const std::string& s, int defaultVal) {
-        if (s.empty()) return defaultVal;
+    std::optional<int> parseIntStrict(const std::string& s) {
+        if (s.empty()) return std::nullopt;
         char* end = nullptr;
         errno = 0;
         long v = std::strtol(s.c_str(), &end, 10);
-        if (errno != 0 || end == s.c_str() || *end != '\0') return defaultVal;
-        if (v < INT_MIN || v > INT_MAX) return defaultVal;
+        if (errno != 0 || end == s.c_str() || *end != '\0') return std::nullopt;
+        if (v < INT_MIN || v > INT_MAX) return std::nullopt;
         return static_cast<int>(v);
+    }
+
+    bool kingsAdjacent(Square a, Square b) {
+        int df = std::abs(int(fileOf(a)) - int(fileOf(b)));
+        int dr = std::abs(int(rankOf(a)) - int(rankOf(b)));
+        return df <= 1 && dr <= 1;
     }
 
     uint64_t zobristPieces_[PIECE_NB][64];
@@ -177,10 +184,38 @@ bool Board::setFen(const std::string& fen) {
     stm_ = (stm == "b") ? BLACK : WHITE;
 
     // Castling rights
-    if (castle.find('K') != std::string::npos) castle_ |= WK;
-    if (castle.find('Q') != std::string::npos) castle_ |= WQ;
-    if (castle.find('k') != std::string::npos) castle_ |= BK;
-    if (castle.find('q') != std::string::npos) castle_ |= BQ;
+    if (castle == "-") {
+        castle_ = 0;
+    } else {
+        bool seenK = false, seenQ = false, seenk = false, seenq = false;
+        for (char c : castle) {
+            switch (c) {
+            case 'K':
+                if (seenK) { restoreOldState(); return false; }
+                seenK = true;
+                castle_ |= WK;
+                break;
+            case 'Q':
+                if (seenQ) { restoreOldState(); return false; }
+                seenQ = true;
+                castle_ |= WQ;
+                break;
+            case 'k':
+                if (seenk) { restoreOldState(); return false; }
+                seenk = true;
+                castle_ |= BK;
+                break;
+            case 'q':
+                if (seenq) { restoreOldState(); return false; }
+                seenq = true;
+                castle_ |= BQ;
+                break;
+            default:
+                restoreOldState();
+                return false;
+            }
+        }
+    }
 
     // En passant
     if (ep != "-") {
@@ -190,13 +225,23 @@ bool Board::setFen(const std::string& fen) {
         }
         File f = File(ep[0] - 'a');
         Rank r = Rank(ep[1] - '1');
+        if ((stm_ == WHITE && r != RANK_6) || (stm_ == BLACK && r != RANK_3)) {
+            restoreOldState();
+            return false;
+        }
         ep_ = makeSquare(f, r);
     }
 
     // Clocks
-    halfMoves_ = safeParseInt(half, 0);
-    fullMoves_ = safeParseInt(full, 1);
-    if (halfMoves_ < 0 || fullMoves_ < 0) {
+    auto parsedHalf = parseIntStrict(half);
+    auto parsedFull = parseIntStrict(full);
+    if (!parsedHalf || !parsedFull) {
+        restoreOldState();
+        return false;
+    }
+    halfMoves_ = *parsedHalf;
+    fullMoves_ = *parsedFull;
+    if (halfMoves_ < 0 || fullMoves_ < 1) {
         restoreOldState();
         return false;
     }
@@ -215,6 +260,55 @@ bool Board::setFen(const std::string& fen) {
     if (popcount(pieces(WHITE, KING)) != 1 || popcount(pieces(BLACK, KING)) != 1) {
         restoreOldState();
         return false;
+    }
+
+    Square whiteKing = kingSquare(WHITE);
+    Square blackKing = kingSquare(BLACK);
+    if (kingsAdjacent(whiteKing, blackKing)) {
+        restoreOldState();
+        return false;
+    }
+
+    if ((castle_ & WK) && (mailbox_[E1] != W_KING || mailbox_[H1] != W_ROOK)) {
+        restoreOldState();
+        return false;
+    }
+    if ((castle_ & WQ) && (mailbox_[E1] != W_KING || mailbox_[A1] != W_ROOK)) {
+        restoreOldState();
+        return false;
+    }
+    if ((castle_ & BK) && (mailbox_[E8] != B_KING || mailbox_[H8] != B_ROOK)) {
+        restoreOldState();
+        return false;
+    }
+    if ((castle_ & BQ) && (mailbox_[E8] != B_KING || mailbox_[A8] != B_ROOK)) {
+        restoreOldState();
+        return false;
+    }
+
+    if (ep_ != SQ_NONE) {
+        Color us = stm_;
+        Square pawnSquare = Square(us == WHITE ? ep_ - 8 : ep_ + 8);
+        if (pawnSquare < A1 || pawnSquare > H8 || mailbox_[pawnSquare] != makePiece(~us, PAWN)) {
+            restoreOldState();
+            return false;
+        }
+
+        bool capturable = false;
+        if (fileOf(ep_) > FILE_A) {
+            Square attacker = Square(us == WHITE ? ep_ - 9 : ep_ + 7);
+            capturable = capturable || (attacker >= A1 && attacker <= H8 &&
+                                        mailbox_[attacker] == makePiece(us, PAWN));
+        }
+        if (fileOf(ep_) < FILE_H) {
+            Square attacker = Square(us == WHITE ? ep_ - 7 : ep_ + 9);
+            capturable = capturable || (attacker >= A1 && attacker <= H8 &&
+                                        mailbox_[attacker] == makePiece(us, PAWN));
+        }
+        if (!capturable) {
+            restoreOldState();
+            return false;
+        }
     }
 
     // Validate: no pawns on first or last rank

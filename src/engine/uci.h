@@ -22,6 +22,7 @@ private:
     void handlePosition(const std::string& line);
     void handleGo(const std::string& line);
     void handleStop();
+    void handlePonderHit();
     void handleSetOption(const std::string& line);
     void stopSearch();
 
@@ -31,6 +32,9 @@ private:
     bool bookEnabled_ = false;
     int moveOverheadMs_ = 0;
     bool showWdl_ = false;
+    bool ponderEnabled_ = false;
+    std::atomic<bool> pondering_{false};
+    int multiPv_ = 1;
     std::thread searchThread_;
     std::atomic<bool> searchRunning_{false};
 };

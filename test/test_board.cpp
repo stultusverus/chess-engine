@@ -177,11 +177,10 @@ void test_castling() {
 
 void test_invalidCastlingRejected() {
     {
-        chess::Board b("4k3/8/8/8/8/8/8/4K3 w K - 0 1");
-        chess::UndoInfo undo;
-        CHECK(!b.makeMove(chess::Move(chess::E1, chess::G1), undo));
-        CHECK(b.pieceOn(chess::E1) == chess::W_KING);
-        CHECK(b.fen() == "4k3/8/8/8/8/8/8/4K3 w K - 0 1");
+        chess::Board b;
+        std::string start = b.fen();
+        CHECK(!b.setFen("4k3/8/8/8/8/8/8/4K3 w K - 0 1"));
+        CHECK(b.fen() == start);
     }
     {
         chess::Board b("4k3/8/8/8/8/8/8/4K2R w - - 0 1");
@@ -189,6 +188,12 @@ void test_invalidCastlingRejected() {
         CHECK(!b.makeMove(chess::Move(chess::E1, chess::G1), undo));
         CHECK(b.pieceOn(chess::E1) == chess::W_KING);
         CHECK(b.pieceOn(chess::H1) == chess::W_ROOK);
+    }
+    {
+        chess::Board b;
+        std::string start = b.fen();
+        CHECK(!b.setFen("4k3/8/8/8/8/8/8/R3K2R w KK - 0 1"));
+        CHECK(b.fen() == start);
     }
 }
 
@@ -243,11 +248,40 @@ void test_enPassantCapture() {
 }
 
 void test_enPassantRequiresCapturedPawn() {
-    chess::Board b("4k3/8/8/4P3/8/8/8/4K3 w - d6 0 1");
+    chess::Board b;
+    std::string start = b.fen();
+    CHECK(!b.setFen("4k3/8/8/4P3/8/8/8/4K3 w - d6 0 1"));
+    CHECK(b.fen() == start);
+}
+
+void test_invalidFenFieldsRejected() {
+    chess::Board b;
+    std::string start = b.fen();
+    uint64_t startHash = b.hash();
+
+    CHECK(!b.setFen("4k3/8/8/8/8/8/8/4K3 w - - x y"));
+    CHECK(b.fen() == start);
+    CHECK(b.hash() == startHash);
+
+    CHECK(!b.setFen("4k3/8/8/8/8/8/8/4K3 w - - 0 0"));
+    CHECK(b.fen() == start);
+
+    CHECK(!b.setFen("4k3/8/8/8/8/8/8/4K3 w A - 0 1"));
+    CHECK(b.fen() == start);
+
+    CHECK(!b.setFen("8/8/8/8/8/8/4k3/4K3 w - - 0 1"));
+    CHECK(b.fen() == start);
+}
+
+void test_validEnPassantFenRequiresCapturablePawn() {
+    chess::Board b;
+    CHECK(b.setFen("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"));
+    CHECK(b.enPassant() == chess::D6);
+
     std::string start = b.fen();
     chess::UndoInfo undo;
-
-    CHECK(!b.makeMove(chess::Move(chess::E5, chess::D6), undo));
+    CHECK(b.makeMove(chess::Move(chess::E5, chess::D6), undo));
+    b.unmakeMove(chess::Move(chess::E5, chess::D6), undo);
     CHECK(b.fen() == start);
 }
 
@@ -290,8 +324,7 @@ void test_invalidPromotionsRejected() {
 
 void test_malformedFenHandledSafely() {
     chess::Board badClocks("4k3/8/8/8/8/8/8/4K3 w - - x y");
-    CHECK(badClocks.halfMoveClock() == 0);
-    CHECK(badClocks.fullMoveNumber() == 1);
+    CHECK(badClocks.fen() == chess::STARTPOS_FEN);
 
     chess::Board badPlacement("9/8/8/8/8/8/8/8 w - - 0 1");
     CHECK(badPlacement.fen() == chess::STARTPOS_FEN);
@@ -323,6 +356,8 @@ int main() {
     RUN_TEST(kingInCheck);
     RUN_TEST(enPassantCapture);
     RUN_TEST(enPassantRequiresCapturedPawn);
+    RUN_TEST(invalidFenFieldsRejected);
+    RUN_TEST(validEnPassantFenRequiresCapturablePawn);
     RUN_TEST(promotion);
     RUN_TEST(invalidPromotionsRejected);
     RUN_TEST(malformedFenHandledSafely);

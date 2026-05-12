@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: Release
+            build_type: Release
+            sanitizer_flags: ""
+          - name: Debug ASan UBSan
+            build_type: Debug
+            sanitizer_flags: "-fsanitize=address,undefined -fno-omit-frame-pointer"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE="${{ matrix.config.build_type }}"
+          -DCMAKE_CXX_FLAGS="${{ matrix.config.sanitizer_flags }}"
+          -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.config.sanitizer_flags }}"
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure

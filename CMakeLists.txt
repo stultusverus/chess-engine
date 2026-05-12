@@ -33,6 +33,9 @@ target_include_directories(engine PUBLIC src)
 add_executable(chess-engine src/main.cpp)
 target_link_libraries(chess-engine PRIVATE engine)
 
+add_executable(bench_engine tools/bench.cpp)
+target_link_libraries(bench_engine PRIVATE engine)
+
 # Tests
 enable_testing()
 

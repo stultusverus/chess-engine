@@ -5,6 +5,11 @@
 namespace chess {
 
 void MoveGenerator::generateMoves(const Board& board, MoveList& moves) {
+    Board legalBoard = board;
+    generateLegalMoves(legalBoard, moves);
+}
+
+void MoveGenerator::generateLegalMoves(Board& board, MoveList& moves) {
     moves.clear();
 
     MoveList pseudo;
@@ -17,8 +22,11 @@ void MoveGenerator::generateMoves(const Board& board, MoveList& moves) {
     generateCastlingMoves(board, pseudo);
 
     for (const Move& m : pseudo) {
-        if (board.isMoveLegal(m))
+        UndoInfo undo;
+        if (board.makeMove(m, undo)) {
             moves.add(m);
+            board.unmakeMove(m, undo);
+        }
     }
 }
 
@@ -213,7 +221,8 @@ uint64_t MoveGenerator::perft(const Board& board, int depth) {
     if (depth == 0) return 1;
 
     MoveList moves;
-    generateMoves(board, moves);
+    Board legalBoard = board;
+    generateLegalMoves(legalBoard, moves);
 
     if (depth == 1) return moves.size();
 
