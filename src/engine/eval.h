@@ -1,6 +1,8 @@
 #pragma once
 
 #include "types.h"
+#include <array>
+#include <cstdint>
 
 namespace chess {
 
@@ -21,13 +23,40 @@ public:
         return vals[pt];
     }
 
+    static constexpr int TOTAL_PHASE = 24;
+
+    static int pieceSquareMg(Piece p, Square s);
+    static int pieceSquareEg(Piece p, Square s);
+    static int phaseValue(PieceType pt);
+
     // Evaluate position from white's perspective (positive = white advantage)
     int evaluate(const Board& board) const;
 
 private:
+    struct PawnCacheEntry {
+        uint64_t pawnHash = 0;
+        int score = 0;
+        bool valid = false;
+    };
+
+    struct EvalCacheEntry {
+        uint64_t hash = 0;
+        uint64_t pawnHash = 0;
+        int score = 0;
+        bool valid = false;
+    };
+
+    static constexpr int PAWN_CACHE_SIZE = 16384;
+    static constexpr int EVAL_CACHE_SIZE = 32768;
+
+    mutable std::array<PawnCacheEntry, PAWN_CACHE_SIZE> pawnCache_{};
+    mutable std::array<EvalCacheEntry, EVAL_CACHE_SIZE> evalCache_{};
+
     int material(const Board& board) const;
     int pieceSquare(const Board& board, int phase) const;
     int gamePhase(const Board& board) const;
+    int tapered(int mgScore, int egScore, int phase) const;
+    int cachedPawnStructure(const Board& board) const;
     int pawnStructure(const Board& board) const;
     int mobility(const Board& board, int phase) const;
     int bishopPair(const Board& board, int phase) const;

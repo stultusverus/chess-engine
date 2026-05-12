@@ -1,9 +1,12 @@
 #include "engine/board.h"
 #include "engine/attacks.h"
 #include "engine/eval.h"
+#include "engine/movegen.h"
 #include "engine/types.h"
 #include <iostream>
 #include <cmath>
+#include <string>
+#include <vector>
 
 static int failures = 0;
 #define CHECK(expr) do { if (!(expr)) { std::cerr << "FAIL: " << #expr << std::endl; failures++; } } while(0)
@@ -15,6 +18,58 @@ static int failures = 0;
 } while(0)
 
 chess::Eval eval;
+
+chess::IncrementalEvalState recomputeIncrementalState(const chess::Board& b) {
+    chess::IncrementalEvalState state;
+    for (int s = chess::A1; s <= chess::H8; s++) {
+        chess::Square sq = chess::Square(s);
+        chess::Piece p = b.pieceOn(sq);
+        if (p == chess::NO_PIECE) continue;
+        chess::PieceType pt = chess::typeOf(p);
+        chess::Color c = chess::colorOf(p);
+        if (pt != chess::KING)
+            state.material += c == chess::WHITE ? chess::Eval::pieceValue(pt) : -chess::Eval::pieceValue(pt);
+        state.pstMg += chess::Eval::pieceSquareMg(p, sq);
+        state.pstEg += chess::Eval::pieceSquareEg(p, sq);
+        state.phase += chess::Eval::phaseValue(pt);
+    }
+    return state;
+}
+
+void checkIncrementalState(const chess::Board& b) {
+    chess::IncrementalEvalState expected = recomputeIncrementalState(b);
+    CHECK(b.materialScore() == expected.material);
+    CHECK(b.pstMgScore() == expected.pstMg);
+    CHECK(b.pstEgScore() == expected.pstEg);
+    CHECK(b.gamePhaseScore() == expected.phase);
+}
+
+void walkIncrementalState(chess::Board& b, chess::MoveGenerator& gen, int depth) {
+    checkIncrementalState(b);
+    if (depth == 0) return;
+
+    uint64_t oldHash = b.hash();
+    uint64_t oldPawnHash = b.pawnHash();
+    chess::IncrementalEvalState oldState = b.evalState();
+    std::string oldFen = b.fen();
+
+    chess::MoveList moves;
+    gen.generateLegalMoves(b, moves);
+    for (const chess::Move& m : moves) {
+        chess::UndoInfo undo;
+        if (!b.makeMove(m, undo)) continue;
+        checkIncrementalState(b);
+        walkIncrementalState(b, gen, depth - 1);
+        b.unmakeMove(m, undo);
+        CHECK(b.hash() == oldHash);
+        CHECK(b.pawnHash() == oldPawnHash);
+        CHECK(b.materialScore() == oldState.material);
+        CHECK(b.pstMgScore() == oldState.pstMg);
+        CHECK(b.pstEgScore() == oldState.pstEg);
+        CHECK(b.gamePhaseScore() == oldState.phase);
+        CHECK(b.fen() == oldFen);
+    }
+}
 
 void test_startpos_balanced() {
     chess::Board b;
@@ -148,6 +203,55 @@ void test_kingOpenFile() {
     CHECK(eval.evaluate(bOpen) > eval.evaluate(bClosed));
 }
 
+void test_incrementalEvalStateMatchesRecompute() {
+    std::vector<std::string> fens = {
+        chess::STARTPOS_FEN,
+        "r3k2r/pppq1ppp/2npbn2/3Np3/2B1P3/2N2Q2/PPP2PPP/R3K2R w KQkq - 0 10",
+        "4k3/P6p/8/3pP3/8/8/p6P/4K3 w - d6 0 1",
+        "8/2k5/8/8/2pPp3/8/4K3/8 b - d3 0 1"
+    };
+
+    chess::MoveGenerator gen;
+    for (const std::string& fen : fens) {
+        chess::Board b(fen);
+        walkIncrementalState(b, gen, 2);
+    }
+}
+
+void test_pawnHashTracksOnlyPawns() {
+    chess::Board pawnsOnly("4k3/8/8/8/8/8/PP6/4K3 w - - 0 1");
+    chess::Board withPieces("r3k3/8/8/8/8/8/PP6/R3K3 b - - 0 1");
+    chess::Board differentPawns("4k3/8/8/8/8/8/P1P5/4K3 w - - 0 1");
+
+    CHECK(pawnsOnly.pawnHash() == withPieces.pawnHash());
+    CHECK(pawnsOnly.pawnHash() != differentPawns.pawnHash());
+
+    uint64_t startPawnHash = pawnsOnly.pawnHash();
+    chess::UndoInfo undo;
+    CHECK(pawnsOnly.makeMove(chess::Move(chess::E1, chess::E2), undo));
+    CHECK(pawnsOnly.pawnHash() == startPawnHash);
+    pawnsOnly.unmakeMove(chess::Move(chess::E1, chess::E2), undo);
+    CHECK(pawnsOnly.pawnHash() == startPawnHash);
+
+    CHECK(pawnsOnly.makeMove(chess::Move(chess::A2, chess::A3), undo));
+    CHECK(pawnsOnly.pawnHash() != startPawnHash);
+    pawnsOnly.unmakeMove(chess::Move(chess::A2, chess::A3), undo);
+    CHECK(pawnsOnly.pawnHash() == startPawnHash);
+}
+
+void test_evalCachePreservesScoresAcrossMakeUnmake() {
+    chess::Board b("r3k2r/pppq1ppp/2npbn2/3Np3/2B1P3/2N2Q2/PPP2PPP/R3K2R w KQkq - 0 10");
+    int startScore = eval.evaluate(b);
+    CHECK(eval.evaluate(b) == startScore);
+
+    chess::UndoInfo undo;
+    CHECK(b.makeMove(chess::Move(chess::E1, chess::G1), undo));
+    int afterScore = eval.evaluate(b);
+    CHECK(eval.evaluate(b) == afterScore);
+    b.unmakeMove(chess::Move(chess::E1, chess::G1), undo);
+    CHECK(eval.evaluate(b) == startScore);
+}
+
 void test_isolatedRookFile() {
     // Isolated pawn on rook file penalized half as much as center file
     // (PST values differ, so combined eval favors a-file in this endgame)
@@ -179,6 +283,9 @@ int main() {
     RUN_TEST(tempo);
     RUN_TEST(kingMobility);
     RUN_TEST(kingOpenFile);
+    RUN_TEST(incrementalEvalStateMatchesRecompute);
+    RUN_TEST(pawnHashTracksOnlyPawns);
+    RUN_TEST(evalCachePreservesScoresAcrossMakeUnmake);
     RUN_TEST(isolatedRookFile);
 
     if (failures > 0) {

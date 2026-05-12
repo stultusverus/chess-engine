@@ -7,6 +7,14 @@
 
 namespace chess {
 
+struct IncrementalEvalState {
+    int material = 0;
+    int pstMg = 0;
+    int pstEg = 0;
+    int phase = 0;
+    uint64_t pawnHash = 0;
+};
+
 struct UndoInfo;
 struct NullUndo;
 
@@ -41,6 +49,12 @@ public:
     int halfMoveClock() const { return halfMoves_; }
     int fullMoveNumber() const { return fullMoves_; }
     uint64_t hash() const { return hash_; }
+    uint64_t pawnHash() const { return evalState_.pawnHash; }
+    int materialScore() const { return evalState_.material; }
+    int pstMgScore() const { return evalState_.pstMg; }
+    int pstEgScore() const { return evalState_.pstEg; }
+    int gamePhaseScore() const { return evalState_.phase; }
+    const IncrementalEvalState& evalState() const { return evalState_; }
 
     // Null move (for search pruning)
     void makeNullMove(NullUndo& undo);
@@ -65,11 +79,15 @@ private:
     int halfMoves_ = 0;
     int fullMoves_ = 1;
     uint64_t hash_ = 0;
+    IncrementalEvalState evalState_{};
     std::vector<uint64_t> posHistory_;
 
     void putPiece(Piece p, Square s);
     void removePiece(Piece p, Square s);
     void movePiece(Piece p, Square from, Square to);
+    void clearEvalState();
+    void addPieceToEval(Piece p, Square s);
+    void removePieceFromEval(Piece p, Square s);
 };
 
 struct UndoInfo {
@@ -80,6 +98,7 @@ struct UndoInfo {
     int oldHalfMoves;
     int oldFullMoves;
     uint64_t oldHash;
+    IncrementalEvalState oldEvalState;
     int oldHistorySize;
 };
 

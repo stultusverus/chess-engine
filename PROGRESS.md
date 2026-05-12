@@ -40,6 +40,7 @@
 - [x] Perft recursion uses make/unmake instead of copying boards at every ply.
 - [x] Quiescence noisy-move generation — qsearch now uses dedicated legal captures/en-passant/promotions outside check instead of generating all legal moves and filtering.
 - [x] Real static exchange evaluation — capture ordering and quiescence pruning use SEE with x-ray, pin, promotion, and en-passant handling.
+- [x] Incremental material/PST state, pawn hash, and eval cache — board make/unmake now maintains eval state, pawn structure is cached by pawn hash, and full evals are cached by position hash.
 
 ## Current Review Findings
 
@@ -52,7 +53,7 @@
 ## Performance Backlog
 
 - [ ] Replace pseudo-legal plus make/unmake legal generation with check/pin-aware move generation.
-- [ ] Add incremental material/PST state, pawn hash, and eval cache.
+- [x] Add incremental material/PST state, pawn hash, and eval cache.
 - [ ] Improve search tuning: better LMR, reverse futility/razoring, continuation and capture history, depth-preferred TT replacement, and soft/hard time management.
 
 ## Strategic Backlog

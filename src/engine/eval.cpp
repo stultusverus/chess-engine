@@ -147,7 +147,6 @@ static constexpr int kingEG[64] = {
 
 // Tapered evaluation: phase = total game phase remaining (24 = start, 0 = endgame only)
 // MG weight = phase / 24, EG weight = 1 - MG weight
-static constexpr int totalPhase = 24;
 static constexpr int phaseInc[PIECE_TYPE_NB] = {0, 1, 1, 2, 4, 0}; // Pawn, Knight, Bishop, Rook, Queen, King
 
 static const int* mgTables[PIECE_TYPE_NB] = {
@@ -191,43 +190,47 @@ static constexpr int KING_ATTACK_QUEEN     = 5;
 static constexpr int KING_ATTACK_PROXIMITY = 2;
 static constexpr int TEMPO_BONUS = 15;
 
+int Eval::pieceSquareMg(Piece p, Square s) {
+    PieceType pt = typeOf(p);
+    if (colorOf(p) == WHITE)
+        return mgTables[pt][s];
+    return -mgTables[pt][s ^ 56];
+}
+
+int Eval::pieceSquareEg(Piece p, Square s) {
+    PieceType pt = typeOf(p);
+    if (colorOf(p) == WHITE)
+        return egTables[pt][s];
+    return -egTables[pt][s ^ 56];
+}
+
+int Eval::phaseValue(PieceType pt) {
+    return phaseInc[pt];
+}
+
 int Eval::material(const Board& board) const {
-    int score = 0;
-    for (PieceType pt = PAWN; pt < KING; pt = PieceType(pt + 1)) {
-        int val = pieceValue(pt);
-        score += val * popcount(board.pieces(WHITE, pt));
-        score -= val * popcount(board.pieces(BLACK, pt));
-    }
-    return score;
+    return board.materialScore();
 }
 
 int Eval::pieceSquare(const Board& board, int phase) const {
-    int mgScore = 0, egScore = 0;
+    return tapered(board.pstMgScore(), board.pstEgScore(), phase);
+}
 
-    for (PieceType pt = PAWN; pt <= KING; pt = PieceType(pt + 1)) {
-        const int* mgTable = mgTables[pt];
-        const int* egTable = egTables[pt];
+int Eval::tapered(int mgScore, int egScore, int phase) const {
+    return (mgScore * phase + egScore * (TOTAL_PHASE - phase)) / TOTAL_PHASE;
+}
 
-        // White pieces
-        Bitboard w = board.pieces(WHITE, pt);
-        while (w) {
-            Square sq = popLsb(w);
-            mgScore += mgTable[sq];
-            egScore += egTable[sq];
-        }
+int Eval::cachedPawnStructure(const Board& board) const {
+    size_t idx = board.pawnHash() & (PAWN_CACHE_SIZE - 1);
+    PawnCacheEntry& entry = pawnCache_[idx];
+    if (entry.valid && entry.pawnHash == board.pawnHash())
+        return entry.score;
 
-        // Black pieces (flip rank: sq ^ 56)
-        Bitboard b = board.pieces(BLACK, pt);
-        while (b) {
-            Square sq = popLsb(b);
-            mgScore -= mgTable[sq ^ 56];
-            egScore -= egTable[sq ^ 56];
-        }
-    }
-
-    // Tapered evaluation
-
-    return (mgScore * phase + egScore * (totalPhase - phase)) / totalPhase;
+    int score = pawnStructure(board);
+    entry.pawnHash = board.pawnHash();
+    entry.score = score;
+    entry.valid = true;
+    return score;
 }
 
 int Eval::pawnStructure(const Board& board) const {
@@ -366,7 +369,7 @@ int Eval::mobility(const Board& board, int phase) const {
         egScore -= moves * KING_MOBILITY_EG;
     }
 
-    return (mgScore * phase + egScore * (totalPhase - phase)) / totalPhase;
+    return tapered(mgScore, egScore, phase);
 }
 
 int Eval::bishopPair(const Board& board, int phase) const {
@@ -382,7 +385,7 @@ int Eval::bishopPair(const Board& board, int phase) const {
     }
 
 
-    return (mgScore * phase + egScore * (totalPhase - phase)) / totalPhase;
+    return tapered(mgScore, egScore, phase);
 }
 
 int Eval::rookOnFile(const Board& board, int phase) const {
@@ -427,7 +430,7 @@ int Eval::rookOnFile(const Board& board, int phase) const {
     }
 
 
-    return (mgScore * phase + egScore * (totalPhase - phase)) / totalPhase;
+    return tapered(mgScore, egScore, phase);
 }
 
 int Eval::kingSafety(const Board& board, int phase) const {
@@ -562,7 +565,7 @@ int Eval::kingSafety(const Board& board, int phase) const {
     }
 
     // King safety is mainly a middlegame concern
-    return (mgScore * phase) / totalPhase;
+    return (mgScore * phase) / TOTAL_PHASE;
 }
 
 int Eval::tempo(const Board& board) const {
@@ -570,21 +573,27 @@ int Eval::tempo(const Board& board) const {
 }
 
 int Eval::gamePhase(const Board& board) const {
-    int phase = 0;
-    for (PieceType pt = KNIGHT; pt < KING; pt = PieceType(pt + 1)) {
-        phase += phaseInc[pt] * popcount(board.pieces(WHITE, pt));
-        phase += phaseInc[pt] * popcount(board.pieces(BLACK, pt));
-    }
-    return phase;
+    return board.gamePhaseScore();
 }
 
 int Eval::evaluate(const Board& board) const {
+    size_t idx = board.hash() & (EVAL_CACHE_SIZE - 1);
+    EvalCacheEntry& entry = evalCache_[idx];
+    if (entry.valid && entry.hash == board.hash() && entry.pawnHash == board.pawnHash())
+        return entry.score;
+
     int phase = gamePhase(board);
-    if (phase > totalPhase) phase = totalPhase;
-    return material(board) + pieceSquare(board, phase) +
-           pawnStructure(board) + mobility(board, phase) +
-           bishopPair(board, phase) + rookOnFile(board, phase) +
-           kingSafety(board, phase) + tempo(board);
+    if (phase > TOTAL_PHASE) phase = TOTAL_PHASE;
+    int score = material(board) + pieceSquare(board, phase) +
+                cachedPawnStructure(board) + mobility(board, phase) +
+                bishopPair(board, phase) + rookOnFile(board, phase) +
+                kingSafety(board, phase) + tempo(board);
+
+    entry.hash = board.hash();
+    entry.pawnHash = board.pawnHash();
+    entry.score = score;
+    entry.valid = true;
+    return score;
 }
 
 } // namespace chess

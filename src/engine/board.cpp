@@ -1,5 +1,6 @@
 #include "board.h"
 #include "attacks.h"
+#include "eval.h"
 #include <algorithm>
 #include <cerrno>
 #include <climits>
@@ -46,6 +47,7 @@ namespace {
     }
 
     uint64_t zobristPieces_[PIECE_NB][64];
+    uint64_t zobristPawns_[COLOR_NB][64];
     uint64_t zobristCastle_[16];
     uint64_t zobristEp_[8];
     uint64_t zobristSide_;
@@ -76,6 +78,9 @@ void Board::initZobrist() {
     for (int p = 0; p < PIECE_NB; p++)
         for (int s = 0; s < 64; s++)
             zobristPieces_[p][s] = prng(state);
+    for (int c = 0; c < COLOR_NB; c++)
+        for (int s = 0; s < 64; s++)
+            zobristPawns_[c][s] = prng(state);
     zobristSide_ = prng(state);
     for (int i = 0; i < 16; i++)
         zobristCastle_[i] = prng(state);
@@ -107,6 +112,7 @@ bool Board::setFen(const std::string& fen) {
     int oldHalfMoves = halfMoves_;
     int oldFullMoves = fullMoves_;
     uint64_t oldHash = hash_;
+    IncrementalEvalState oldEvalState = evalState_;
     auto oldHistory = posHistory_;
 
     auto restoreOldState = [&]() {
@@ -119,6 +125,7 @@ bool Board::setFen(const std::string& fen) {
         halfMoves_ = oldHalfMoves;
         fullMoves_ = oldFullMoves;
         hash_ = oldHash;
+        evalState_ = oldEvalState;
         posHistory_ = oldHistory;
     };
 
@@ -131,6 +138,7 @@ bool Board::setFen(const std::string& fen) {
     halfMoves_ = 0;
     fullMoves_ = 1;
     hash_ = 0;
+    clearEvalState();
 
     std::istringstream ss(fen);
     std::string placement, stm, castle, ep, half, full;
@@ -262,11 +270,15 @@ bool Board::setFen(const std::string& fen) {
         return false;
     }
 
-    // Build hash
+    // Build hash and incremental eval state
     hash_ = 0;
+    clearEvalState();
     for (int s = 0; s < 64; s++) {
         Piece p = mailbox_[s];
-        if (p != NO_PIECE) hash_ ^= zobristPieces_[p][s];
+        if (p != NO_PIECE) {
+            hash_ ^= zobristPieces_[p][s];
+            addPieceToEval(p, Square(s));
+        }
     }
     if (stm_ == BLACK) hash_ ^= zobristSide_;
     hash_ ^= zobristCastle_[castle_];
@@ -360,12 +372,43 @@ std::string Board::fen() const {
     return ss.str();
 }
 
+void Board::clearEvalState() {
+    evalState_ = IncrementalEvalState{};
+}
+
+void Board::addPieceToEval(Piece p, Square s) {
+    if (p == NO_PIECE) return;
+    PieceType pt = typeOf(p);
+    Color c = colorOf(p);
+    if (pt != KING)
+        evalState_.material += c == WHITE ? Eval::pieceValue(pt) : -Eval::pieceValue(pt);
+    evalState_.pstMg += Eval::pieceSquareMg(p, s);
+    evalState_.pstEg += Eval::pieceSquareEg(p, s);
+    evalState_.phase += Eval::phaseValue(pt);
+    if (pt == PAWN)
+        evalState_.pawnHash ^= zobristPawns_[c][s];
+}
+
+void Board::removePieceFromEval(Piece p, Square s) {
+    if (p == NO_PIECE) return;
+    PieceType pt = typeOf(p);
+    Color c = colorOf(p);
+    if (pt != KING)
+        evalState_.material -= c == WHITE ? Eval::pieceValue(pt) : -Eval::pieceValue(pt);
+    evalState_.pstMg -= Eval::pieceSquareMg(p, s);
+    evalState_.pstEg -= Eval::pieceSquareEg(p, s);
+    evalState_.phase -= Eval::phaseValue(pt);
+    if (pt == PAWN)
+        evalState_.pawnHash ^= zobristPawns_[c][s];
+}
+
 void Board::putPiece(Piece p, Square s) {
     if (p == NO_PIECE) return;
     byPiece_[p] |= squareBb(s);
     byColor_[colorOf(p)] |= squareBb(s);
     mailbox_[s] = p;
     hash_ ^= zobristPieces_[p][s];
+    addPieceToEval(p, s);
 }
 
 void Board::removePiece(Piece p, Square s) {
@@ -374,6 +417,7 @@ void Board::removePiece(Piece p, Square s) {
     byColor_[colorOf(p)] &= ~squareBb(s);
     mailbox_[s] = NO_PIECE;
     hash_ ^= zobristPieces_[p][s];
+    removePieceFromEval(p, s);
 }
 
 void Board::movePiece(Piece p, Square from, Square to) {
@@ -387,6 +431,7 @@ bool Board::makeMove(Move move, UndoInfo& undo) {
     undo.oldHalfMoves = halfMoves_;
     undo.oldFullMoves = fullMoves_;
     undo.oldHash = hash_;
+    undo.oldEvalState = evalState_;
     undo.captured = NO_PIECE;
     undo.oldHistorySize = static_cast<int>(posHistory_.size());
 
@@ -656,6 +701,7 @@ void Board::unmakeMove(Move /*move*/, const UndoInfo& undo) {
     }
 
     hash_ = undo.oldHash;
+    evalState_ = undo.oldEvalState;
     posHistory_.resize(undo.oldHistorySize);
 }
 
