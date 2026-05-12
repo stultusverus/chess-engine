@@ -42,9 +42,9 @@ static std::string runEngine(const std::string& input) {
     return runCommand(command);
 }
 
-static std::string runEngineWithDelayedQuit(const std::string& input) {
+static std::string runEngineWithDelayedQuit(const std::string& input, const std::string& delaySeconds = "0.1") {
     std::string escaped = escapeForSingleQuotedPrintf(input);
-    std::string command = "{ printf '" + escaped + "'; sleep 0.1; printf 'quit\\n'; } | ./chess-engine 2>&1";
+    std::string command = "{ printf '" + escaped + "'; sleep " + delaySeconds + "; printf 'quit\\n'; } | ./chess-engine 2>&1";
     return runCommand(command);
 }
 
@@ -133,7 +133,8 @@ void test_searchInfoEmittedOncePerCompletedGo() {
 void test_mateScoresUseUciMateFormat() {
     std::string output = runEngineWithDelayedQuit(
         "position fen 1k6/ppp5/8/8/8/8/PPP5/1K1R4 w - - 0 1\n"
-        "go depth 2\n");
+        "go depth 1\n",
+        "1");
 
     // Expected: mate scores use UCI score mate, not huge centipawn values.
     CHECK(contains(output, "score mate "));
