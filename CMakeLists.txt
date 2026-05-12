@@ -17,6 +17,8 @@ add_library(engine STATIC
     src/engine/movegen.cpp
     src/engine/eval.h
     src/engine/eval.cpp
+    src/engine/see.h
+    src/engine/see.cpp
     src/engine/search.h
     src/engine/search.cpp
     src/engine/tt.h
@@ -54,6 +56,10 @@ add_test(NAME eval COMMAND test_eval)
 add_executable(test_search test/test_search.cpp)
 target_link_libraries(test_search PRIVATE engine)
 add_test(NAME search COMMAND test_search)
+
+add_executable(test_see test/test_see.cpp)
+target_link_libraries(test_see PRIVATE engine)
+add_test(NAME see COMMAND test_see)
 
 add_executable(test_book test/test_book.cpp)
 target_link_libraries(test_book PRIVATE engine)

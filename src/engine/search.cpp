@@ -1,5 +1,6 @@
 #include "search.h"
 #include "board.h"
+#include "see.h"
 #include <algorithm>
 #include <chrono>
 
@@ -340,11 +341,9 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
     sortMoves(searchMoves, board, ply);
 
     for (const Move& m : searchMoves) {
-        // Static exchange evaluation (SEE): skip losing captures in qsearch
-        if (m.type == CAPTURE && !inCheck) {
-            PieceType victim = typeOf(board.pieceOn(m.to));
-            PieceType attacker = typeOf(board.pieceOn(m.from));
-            if (Eval::pieceValue(victim) < Eval::pieceValue(attacker) && standPat + Eval::pieceValue(victim) + 200 < alpha)
+        // Static exchange evaluation (SEE): skip captures that lose material by force.
+        if ((m.type == CAPTURE || m.type == PROMOTION_CAPTURE || m.type == EN_PASSANT) && !inCheck) {
+            if (staticExchangeEval(board, m) < 0)
                 continue;
         }
 
@@ -374,13 +373,9 @@ int Search::scoreMove(const Board& board, Move m, int ply) const {
         }
     }
 
-    if (m.type == CAPTURE || m.type == PROMOTION_CAPTURE) {
-        PieceType victim = typeOf(board.pieceOn(m.to));
-        PieceType attacker = typeOf(board.pieceOn(m.from));
-        score = 100000 + Eval::pieceValue(victim) - Eval::pieceValue(attacker) / 10;
-        if (m.type == PROMOTION_CAPTURE) score += Eval::pieceValue(m.promotion);
-    } else if (m.type == EN_PASSANT) {
-        score = 100000 + Eval::pieceValue(PAWN);
+    if (m.type == CAPTURE || m.type == PROMOTION_CAPTURE || m.type == EN_PASSANT) {
+        int see = staticExchangeEval(board, m);
+        score = see >= 0 ? 100000 + see : see;
     } else if (m.type == PROMOTION) {
         score = 90000 + Eval::pieceValue(m.promotion);
     } else {
@@ -397,9 +392,22 @@ int Search::scoreMove(const Board& board, Move m, int ply) const {
 }
 
 void Search::sortMoves(MoveList& moves, const Board& board, int ply) {
-    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b) {
-        return scoreMove(board, a, ply) > scoreMove(board, b, ply);
-    });
+    int scores[MAX_MOVES]{};
+    for (int i = 0; i < moves.size(); i++)
+        scores[i] = scoreMove(board, moves[i], ply);
+
+    for (int i = 1; i < moves.size(); i++) {
+        Move move = moves[i];
+        int score = scores[i];
+        int j = i - 1;
+        while (j >= 0 && scores[j] < score) {
+            moves[j + 1] = moves[j];
+            scores[j + 1] = scores[j];
+            j--;
+        }
+        moves[j + 1] = move;
+        scores[j + 1] = score;
+    }
 }
 
 bool Search::rootMoveAllowed(Move m) const {

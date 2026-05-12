@@ -39,6 +39,7 @@
 - [x] CI — GitHub Actions Release and Debug ASan/UBSan builds run `ctest --output-on-failure`.
 - [x] Perft recursion uses make/unmake instead of copying boards at every ply.
 - [x] Quiescence noisy-move generation — qsearch now uses dedicated legal captures/en-passant/promotions outside check instead of generating all legal moves and filtering.
+- [x] Real static exchange evaluation — capture ordering and quiescence pruning use SEE with x-ray, pin, promotion, and en-passant handling.
 
 ## Current Review Findings
 
@@ -52,7 +53,7 @@
 
 - [ ] Replace pseudo-legal plus make/unmake legal generation with check/pin-aware move generation.
 - [ ] Add incremental material/PST state, pawn hash, and eval cache.
-- [ ] Improve search tuning: real SEE, better LMR, reverse futility/razoring, continuation and capture history, depth-preferred TT replacement, and soft/hard time management.
+- [ ] Improve search tuning: better LMR, reverse futility/razoring, continuation and capture history, depth-preferred TT replacement, and soft/hard time management.
 
 ## Strategic Backlog
 
