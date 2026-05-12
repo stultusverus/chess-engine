@@ -26,6 +26,7 @@ namespace {
     uint64_t zobristCastle_[16];
     uint64_t zobristEp_[8];
     uint64_t zobristSide_;
+    bool zobristInitialized_ = false;
 
     uint64_t prng(uint64_t& state) {
         state ^= state >> 12;
@@ -57,15 +58,18 @@ void Board::initZobrist() {
         zobristCastle_[i] = prng(state);
     for (int f = 0; f < 8; f++)
         zobristEp_[f] = prng(state);
+    zobristInitialized_ = true;
 }
 
 // --- Board ---
 
 Board::Board() {
+    if (!zobristInitialized_) initZobrist();
     setFen(STARTPOS_FEN);
 }
 
 Board::Board(const std::string& fen) {
+    if (!zobristInitialized_) initZobrist();
     if (!setFen(fen))
         setFen(STARTPOS_FEN);
 }
@@ -109,24 +113,37 @@ bool Board::setFen(const std::string& fen) {
     std::string placement, stm, castle, ep, half, full;
 
     ss >> placement >> stm >> castle >> ep >> half >> full;
+    if (placement.empty() || stm.empty() || castle.empty() || ep.empty() || half.empty() || full.empty()) {
+        restoreOldState();
+        return false;
+    }
 
     // Piece placement
     Square sq = A8;
+    int file = 0;
+    int rank = 7;
     for (char c : placement) {
         if (c == '/') {
-            if (sq == 0) break;
-            int prevRank = rankOf(Square(sq - 1));
-            if (prevRank <= 0) break;
-            sq = makeSquare(FILE_A, Rank(prevRank - 1));
+            if (file != 8 || rank == 0) {
+                restoreOldState();
+                return false;
+            }
+            rank--;
+            file = 0;
+            sq = makeSquare(FILE_A, Rank(rank));
         } else if (std::isdigit(static_cast<unsigned char>(c))) {
             int empty = c - '0';
-            if (empty < 1 || empty > 8) break;
-            for (int i = 0; i < empty; i++) {
-                sq = Square(sq + 1);
-                if (sq < 0 || sq >= 64) break;
+            if (empty < 1 || empty > 8 || file + empty > 8) {
+                restoreOldState();
+                return false;
             }
+            file += empty;
+            sq = Square(sq + empty);
         } else {
-            if (sq >= 64) break;
+            if (sq >= 64 || file >= 8) {
+                restoreOldState();
+                return false;
+            }
             Piece p = NO_PIECE;
             switch (c) {
             case 'P': p = W_PAWN; break; case 'N': p = W_KNIGHT; break;
@@ -136,16 +153,27 @@ bool Board::setFen(const std::string& fen) {
             case 'b': p = B_BISHOP; break; case 'r': p = B_ROOK; break;
             case 'q': p = B_QUEEN; break; case 'k': p = B_KING; break;
             }
-            if (p != NO_PIECE) {
-                byPiece_[p] |= squareBb(sq);
-                byColor_[colorOf(p)] |= squareBb(sq);
-                mailbox_[sq] = p;
+            if (p == NO_PIECE) {
+                restoreOldState();
+                return false;
             }
+            byPiece_[p] |= squareBb(sq);
+            byColor_[colorOf(p)] |= squareBb(sq);
+            mailbox_[sq] = p;
             sq = Square(sq + 1);
+            file++;
         }
+    }
+    if (rank != 0 || file != 8) {
+        restoreOldState();
+        return false;
     }
 
     // Side to move
+    if (stm != "w" && stm != "b") {
+        restoreOldState();
+        return false;
+    }
     stm_ = (stm == "b") ? BLACK : WHITE;
 
     // Castling rights
@@ -155,7 +183,11 @@ bool Board::setFen(const std::string& fen) {
     if (castle.find('q') != std::string::npos) castle_ |= BQ;
 
     // En passant
-    if (ep != "-" && ep.size() >= 2 && ep[0] >= 'a' && ep[0] <= 'h' && ep[1] >= '1' && ep[1] <= '8') {
+    if (ep != "-") {
+        if (ep.size() != 2 || ep[0] < 'a' || ep[0] > 'h' || ep[1] < '1' || ep[1] > '8') {
+            restoreOldState();
+            return false;
+        }
         File f = File(ep[0] - 'a');
         Rank r = Rank(ep[1] - '1');
         ep_ = makeSquare(f, r);
@@ -164,6 +196,10 @@ bool Board::setFen(const std::string& fen) {
     // Clocks
     halfMoves_ = safeParseInt(half, 0);
     fullMoves_ = safeParseInt(full, 1);
+    if (halfMoves_ < 0 || fullMoves_ < 0) {
+        restoreOldState();
+        return false;
+    }
 
     // Build hash
     hash_ = 0;
