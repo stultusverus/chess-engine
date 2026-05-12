@@ -11,7 +11,7 @@ openings="${OPENINGS:-${books_dir}/8moves_v3.pgn}"
 tc="${TC:-10+0.1}"
 rounds="${ROUNDS:-100000}"
 games="${GAMES:-2}"
-sprt="${SPRT:-elo0=0 elo1=5 alpha=0.05 beta=0.05}"
+sprt="${SPRT:-elo0=0 elo1=10 alpha=0.10 beta=0.10}"
 draw="${DRAW:-movenumber=34 movecount=8 score=20}"
 resign="${RESIGN:-movecount=3 score=600}"
 startup_ms="${STARTUP_MS:-60000}"
@@ -185,7 +185,7 @@ printf '\n'
 cd "${run_dir}"
 if [[ "${quiet_console}" == "1" ]]; then
     # Keep the full FastChess log, but drop verbose position dumps from the terminal.
-    exec > >(tee -a "${run_log}" | grep -Ev '^(Position;|Moves;)') 2>&1
+    exec > >(tee -a "${run_log}" | grep -Ev '^(Position;|Moves;|Info;|Warning;)') 2>&1
 else
     exec > >(tee -a "${run_log}") 2>&1
 fi
