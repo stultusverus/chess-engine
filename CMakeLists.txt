@@ -5,6 +5,30 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(NOT DEFINED CHESS_ENGINE_VERSION)
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} describe --tags --dirty --always
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            OUTPUT_VARIABLE CHESS_ENGINE_VERSION
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+    endif()
+endif()
+
+if(NOT CHESS_ENGINE_VERSION)
+    set(CHESS_ENGINE_VERSION "unknown")
+endif()
+
+message(STATUS "Chess engine version: ${CHESS_ENGINE_VERSION}")
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/engine/version.h
+    @ONLY
+)
+
 # Engine library
 add_library(engine STATIC
     src/engine/types.h
@@ -30,6 +54,7 @@ add_library(engine STATIC
 )
 
 target_include_directories(engine PUBLIC src)
+target_include_directories(engine PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 # UCI engine executable
 add_executable(chess-engine src/main.cpp)

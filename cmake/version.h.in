@@ -1,0 +1,3 @@
+#pragma once
+
+#define CHESS_ENGINE_VERSION "@CHESS_ENGINE_VERSION@"

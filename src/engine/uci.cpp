@@ -2,6 +2,7 @@
 #include "board.h"
 #include "search.h"
 #include "attacks.h"
+#include "engine/version.h"
 #include <algorithm>
 #include <cerrno>
 #include <cctype>
@@ -159,7 +160,7 @@ void UCI::loop() {
 }
 
 void UCI::handleUci() {
-    std::cout << "id name ChessEngine" << std::endl;
+    std::cout << "id name ChessEngine " << CHESS_ENGINE_VERSION << std::endl;
     std::cout << "id author chess-engine" << std::endl;
     std::cout << "option name Hash type spin default 64 min 1 max 4096" << std::endl;
     std::cout << "option name Move Overhead type spin default 0 min 0 max 5000" << std::endl;

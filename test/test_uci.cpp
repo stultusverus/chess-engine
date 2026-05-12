@@ -253,6 +253,7 @@ void test_ponderHitReturnsBestMove() {
 
 void test_uciDoesNotAdvertisePonder() {
     std::string output = runEngine("uci\nquit\n");
+    CHECK(contains(output, "id name ChessEngine "));
     CHECK(!contains(output, "option name Ponder"));
     CHECK(contains(output, "uciok"));
 }
