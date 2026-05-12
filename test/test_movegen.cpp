@@ -3,6 +3,7 @@
 #include "engine/movegen.h"
 #include "engine/types.h"
 #include <iostream>
+#include <string>
 
 static int failures = 0;
 #define CHECK(expr) do { if (!(expr)) { std::cerr << "FAIL: " << #expr << std::endl; failures++; } } while(0)
@@ -20,6 +21,54 @@ static const chess::Move* findMove(const chess::MoveList& moves, chess::Square f
             return &m;
     }
     return nullptr;
+}
+
+static bool isNoisy(const chess::Move& move) {
+    return move.type == chess::CAPTURE ||
+           move.type == chess::EN_PASSANT ||
+           move.type == chess::PROMOTION ||
+           move.type == chess::PROMOTION_CAPTURE;
+}
+
+static bool sameMove(const chess::Move& a, const chess::Move& b) {
+    return a.from == b.from &&
+           a.to == b.to &&
+           a.promotion == b.promotion &&
+           a.type == b.type;
+}
+
+static bool containsExactMove(const chess::MoveList& moves, const chess::Move& target) {
+    for (const chess::Move& m : moves) {
+        if (sameMove(m, target))
+            return true;
+    }
+    return false;
+}
+
+static void checkNoisyMatchesFilteredLegalMoves(const std::string& fen) {
+    chess::MoveGenerator gen;
+    chess::Board fullBoard(fen);
+    chess::Board noisyBoard(fen);
+    chess::MoveList fullMoves;
+    chess::MoveList noisyMoves;
+    chess::MoveList expected;
+
+    gen.generateMoves(fullBoard, fullMoves);
+    gen.generateLegalNoisyMoves(noisyBoard, noisyMoves);
+
+    for (const chess::Move& m : fullMoves) {
+        if (isNoisy(m))
+            expected.add(m);
+    }
+
+    CHECK(noisyMoves.size() == expected.size());
+    for (const chess::Move& m : noisyMoves) {
+        CHECK(isNoisy(m));
+        CHECK(containsExactMove(expected, m));
+    }
+    for (const chess::Move& m : expected) {
+        CHECK(containsExactMove(noisyMoves, m));
+    }
 }
 
 void test_startpos_perft() {
@@ -151,6 +200,48 @@ void test_generateMovesClearsOutputList() {
     CHECK(moves.size() == 0);
 }
 
+void test_generateLegalNoisyMovesMatchesFilteredLegalMoves() {
+    checkNoisyMatchesFilteredLegalMoves("4k3/8/8/3q4/3Q4/8/8/4K3 w - - 0 1");
+    checkNoisyMatchesFilteredLegalMoves("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1");
+    checkNoisyMatchesFilteredLegalMoves("4k2r/6P1/8/8/8/8/8/4K3 w - - 0 1");
+    checkNoisyMatchesFilteredLegalMoves("4r1k1/8/8/8/8/8/3nR3/4K3 w - - 0 1");
+    checkNoisyMatchesFilteredLegalMoves("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
+}
+
+void test_generateLegalNoisyMovesFiltersIllegalPinnedCaptures() {
+    chess::MoveGenerator gen;
+    chess::MoveList moves;
+    chess::Board pinned("4r1k1/8/8/8/8/8/3nR3/4K3 w - - 0 1");
+
+    gen.generateLegalNoisyMoves(pinned, moves);
+
+    CHECK(findMove(moves, chess::E2, chess::D2) == nullptr);
+    CHECK(findMove(moves, chess::E2, chess::E8) != nullptr);
+}
+
+void test_generateLegalNoisyMovesClearsOutputList() {
+    chess::MoveGenerator gen;
+    chess::MoveList moves;
+
+    chess::Board capture("4k3/8/8/3q4/3Q4/8/8/4K3 w - - 0 1");
+    gen.generateLegalNoisyMoves(capture, moves);
+    CHECK(moves.size() > 0);
+
+    chess::Board quiet("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
+    gen.generateLegalNoisyMoves(quiet, moves);
+    CHECK(moves.size() == 0);
+}
+
+void test_hasLegalMoveDetectsStalemate() {
+    chess::MoveGenerator gen;
+    chess::Board start;
+    chess::Board stalemate("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1");
+
+    CHECK(gen.hasLegalMove(start));
+    CHECK(!stalemate.isInCheck());
+    CHECK(!gen.hasLegalMove(stalemate));
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -165,6 +256,10 @@ int main() {
     RUN_TEST(noCastlingWithoutRook);
     RUN_TEST(generatedMoveTypesAreClassified);
     RUN_TEST(generateMovesClearsOutputList);
+    RUN_TEST(generateLegalNoisyMovesMatchesFilteredLegalMoves);
+    RUN_TEST(generateLegalNoisyMovesFiltersIllegalPinnedCaptures);
+    RUN_TEST(generateLegalNoisyMovesClearsOutputList);
+    RUN_TEST(hasLegalMoveDetectsStalemate);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

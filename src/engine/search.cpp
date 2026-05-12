@@ -325,24 +325,16 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
         if (standPat + delta < alpha) return alpha;
     }
 
-    MoveList moves;
-    gen_.generateLegalMoves(board, moves);
-
     MoveList searchMoves;
     if (inCheck) {
-        searchMoves = moves;
+        gen_.generateLegalMoves(board, searchMoves);
     } else {
-        for (const Move& m : moves) {
-            if (m.type == CAPTURE || m.type == EN_PASSANT || m.type == PROMOTION_CAPTURE)
-                searchMoves.add(m);
-            else if (m.type == PROMOTION)
-                searchMoves.add(m);
-        }
+        gen_.generateLegalNoisyMoves(board, searchMoves);
     }
 
     if (searchMoves.size() == 0) {
         if (inCheck) return -MATE + ply;
-        return moves.size() == 0 ? 0 : alpha;
+        return gen_.hasLegalMove(board) ? alpha : 0;
     }
 
     sortMoves(searchMoves, board, ply);

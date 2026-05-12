@@ -29,9 +29,13 @@ class MoveGenerator {
 public:
     void generateMoves(const Board& board, MoveList& moves);
     void generateLegalMoves(Board& board, MoveList& moves);
+    void generateLegalNoisyMoves(Board& board, MoveList& moves);
+    bool hasLegalMove(Board& board);
     uint64_t perft(const Board& board, int depth);
 
 private:
+    void addLegalMoves(Board& board, const MoveList& pseudo, MoveList& legal);
+    bool hasLegalMove(Board& board, const MoveList& pseudo);
     void generatePawnMoves(const Board& board, MoveList& moves);
     void generateKnightMoves(const Board& board, MoveList& moves);
     void generateBishopMoves(const Board& board, MoveList& moves);
@@ -39,6 +43,12 @@ private:
     void generateQueenMoves(const Board& board, MoveList& moves);
     void generateKingMoves(const Board& board, MoveList& moves);
     void generateCastlingMoves(const Board& board, MoveList& moves);
+    void generateNoisyPawnMoves(const Board& board, MoveList& moves);
+    void generateNoisyKnightMoves(const Board& board, MoveList& moves);
+    void generateNoisyBishopMoves(const Board& board, MoveList& moves);
+    void generateNoisyRookMoves(const Board& board, MoveList& moves);
+    void generateNoisyQueenMoves(const Board& board, MoveList& moves);
+    void generateNoisyKingMoves(const Board& board, MoveList& moves);
     uint64_t perftMutable(Board& board, int depth);
 };
 
