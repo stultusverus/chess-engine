@@ -20,6 +20,16 @@ Produces two executables:
 cd build && ctest --output-on-failure
 ```
 
+When changing UCI/search timing, async subprocess tests, or anything that affects emitted `info` lines, rebuild the relevant executable and run the UCI test more than once before committing:
+
+```bash
+cd build
+cmake --build . --target chess-engine test_uci
+ctest --output-on-failure -R uci --repeat-until-fail 3
+```
+
+Avoid brittle UCI tests that depend on exact asynchronous `info depth` line counts or the last info line when a search can finish before `quit`/`stop` is delivered. Prefer asserting the specific required token appears with enough delay for CI runners.
+
 ## Lint
 
 ```bash

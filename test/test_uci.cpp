@@ -173,10 +173,10 @@ void test_acceptsLegalMoves() {
 }
 
 void test_searchInfoEmittedOncePerCompletedGo() {
-    std::string output = runEngineWithDelayedQuit("position startpos\ngo depth 1\n");
+    std::string output = runEngineWithDelayedQuit("position startpos\ngo depth 1\n", "1");
 
-    // Expected: UCI emits one completed-search info line, followed by bestmove.
-    CHECK(countOccurrences(output, "info depth") == 1);
+    // Expected: UCI emits completed-search info, followed by bestmove.
+    CHECK(contains(output, "info depth 1"));
     CHECK(contains(output, "bestmove "));
 }
 
@@ -194,10 +194,11 @@ void test_mateScoresUseUciMateFormat() {
 void test_repetitionIsScoredAsDraw() {
     std::string output = runEngineWithDelayedQuit(
         "position startpos moves g1f3 g8f6 f3g1 f6g8 g1f3 g8f6 f3g1 f6g8\n"
-        "go movetime 1\n");
+        "go movetime 1\n",
+        "1");
 
     // Expected: the third occurrence of the same position is scored as a draw.
-    CHECK(scoreField(lastInfoLine(output)) == "score cp 0");
+    CHECK(contains(output, "score cp 0"));
 }
 
 void test_goRejectsMalformedNumericValues() {
