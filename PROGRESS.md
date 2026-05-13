@@ -65,7 +65,7 @@
 - [ ] Avoid eager SEE for every capture during full move sorting; compute SEE lazily where possible.
 - [ ] Upgrade TT replacement with 2-way/4-way clustered buckets and generation/age.
 - [ ] Store static evaluation in TT entries if it improves pruning/eval reuse.
-- [ ] Add machine-readable speed and tactical benchmark modes around fixed positions and EPD suites.
+- [x] Add machine-readable JSON speed and tactical benchmark modes around fixed positions and EPD suites.
 - [x] Add optional slow perft assertions behind `CHESS_ENGINE_SLOW_TESTS`.
 - [x] Add deterministic make/unmake invariant tests comparing FEN, hash, pawn hash, eval state, and generated move legality.
 - [x] Add fixed-seed pseudo-random make/unmake invariant tests for broader generated-position coverage.

@@ -12,7 +12,7 @@ make -j$(sysctl -n hw.ncpu)  # Linux: use $(nproc)
 
 Produces two executables:
 - `chess-engine` — UCI engine (stdin/stdout protocol)
-- `bench_engine` — local perft/search/tactical benchmark runner
+- `bench_engine` — local perft/search/tactical benchmark runner; pass `--json` for machine-readable output
 
 ## Test
 

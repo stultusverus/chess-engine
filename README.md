@@ -70,7 +70,9 @@ Run the lightweight in-repo benchmark target after building:
 
 ```bash
 ./bench_engine
+./bench_engine --json
 ./bench_engine path/to/tactical.epd
+./bench_engine --json path/to/tactical.epd
 ```
 
 ## Current Development Status
