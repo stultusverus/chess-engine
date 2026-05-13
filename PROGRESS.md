@@ -49,11 +49,6 @@
 - [x] Normalize en-passant FEN/hash handling. Syntactically valid EP targets are accepted, but EP is hashed only when an EP capture is possible.
 - [x] Remove advertised `Ponder` support until true ponder continuation is implemented.
 - [x] Add regression tests for the above UCI/book/FEN edge cases.
-- [ ] Fix null-move en-passant hash removal. `Board::makeNullMove` currently toggles side before checking whether the old EP key was present.
-- [ ] Make UCI `Hash` an allocation cap by avoiding TT round-up above the requested size.
-- [ ] Give serial `MultiPV` searches a shared deadline, or replace serial searches with true single-search MultiPV.
-- [ ] Restrict or benchmark broad internal iterative deepening before relying on it as a strength improvement.
-- [ ] Decide whether unsupported `go ponder` should be ignored, rejected, or implemented as real ponder.
 
 ## Performance Backlog
 
@@ -61,17 +56,9 @@
 - [x] Add incremental material/PST state, pawn hash, and eval cache.
 - [x] Improve search infrastructure with depth-preferred TT replacement and soft/hard time management.
 - [x] Improve search tuning with better LMR, reverse futility/razoring, continuation history, and capture history.
-- [ ] Add a staged move picker: TT move, good captures/promotions, killers/countermoves, quiet history, then bad captures.
-- [ ] Avoid eager SEE for every capture during full move sorting; compute SEE lazily where possible.
-- [ ] Upgrade TT replacement with 2-way/4-way clustered buckets and generation/age.
-- [ ] Store static evaluation in TT entries if it improves pruning/eval reuse.
-- [ ] Add machine-readable speed and tactical benchmark modes around fixed positions and EPD suites.
-- [ ] Add optional slow perft assertions behind an environment flag.
-- [ ] Add randomized make/unmake invariant tests comparing FEN, hash, pawn hash, eval state, and legal-move consistency.
 
 ## Strategic Backlog
 
 - [ ] Optional Syzygy probing behind compile/runtime configuration.
-- [ ] Automated classical eval tuning using Texel or SPSA before adding many more hand-tuned terms.
 - [ ] NNUE evaluation experiment after SPRT and tactical benchmark baselines are stable.
 - [ ] SMP search with UCI `Threads` after single-thread search behavior is stable.

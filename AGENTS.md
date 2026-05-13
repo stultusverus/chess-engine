@@ -60,23 +60,11 @@ The latest correctness review fixes are now part of the codebase and should rema
 - En-passant FEN/hash handling accepts syntactically valid EP targets while hashing EP only when an EP capture is possible.
 - `Ponder` is no longer advertised until true ponder continuation is implemented.
 - Quiescence search uses a dedicated noisy-move generator outside check instead of generating all legal moves and filtering.
-- Legal move generation is check/pin-aware.
-- Board make/unmake maintains incremental material/PST state, pawn hash, and eval-cache inputs.
-
-Current high-priority review findings:
-
-- Fix null-move en-passant hash removal: `makeNullMove` toggles side before deciding whether to remove the EP Zobrist key, but the key was added for the old side to move.
-- Make UCI `Hash` sizing an upper bound; current TT sizing rounds up to the next power of two and can allocate nearly twice the requested memory.
-- Give serial `MultiPV` searches a shared time budget or replace them with a true single-search MultiPV implementation.
-- Restrict or benchmark internal iterative deepening, which currently runs broadly when depth is at least 3 and no TT move is available.
-- Clarify unsupported `go ponder` behavior until true ponder continuation is implemented.
 
 Current high-value performance work:
 
-- Add a staged move picker and compute SEE lazily instead of scoring every move up front.
-- Improve TT quality with clustered buckets, generation/age, and optionally static eval storage.
-- Add automated eval tuning before expanding hand-tuned classical terms.
-- Extend benchmark coverage with fixed-node/depth tactical EPD and speed suites.
+- Improve legal move generation with check/pin-aware generation.
+- Add incremental eval pieces such as material/PST state, pawn hash, and evaluation cache.
 
 ## Opening Book
 
