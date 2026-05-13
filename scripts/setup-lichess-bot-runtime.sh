@@ -242,20 +242,34 @@ pgn_directory: "${RUNTIME_DIR}/pgn"
 pgn_file_grouping: "game"
 
 matchmaking:
-  allow_matchmaking: false
+  allow_matchmaking: true
   allow_during_games: false
-  challenge_variant: "random"
-  challenge_timeout: 30
+  challenge_variant: "standard"
+  challenge_timeout: 15
   challenge_initial_time:
-    - 60
     - 180
+    - 240
+    - 300
+    - 360
+    - 420
+    - 480
+    - 540
+    - 600
   challenge_increment:
     - 1
     - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 10
   opponent_rating_difference: 300
   rating_preference: "none"
-  challenge_mode: "random"
-  challenge_filter: none
+  challenge_mode: "casual"
+  challenge_filter: fine
   include_challenge_block_list: false
 EOF_CONFIG
 fi
