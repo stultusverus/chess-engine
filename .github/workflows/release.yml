@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            suffix: linux-x86_64
+          - os: macos-latest
+            suffix: macos
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
+          cmake --build build --parallel "$NPROC"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: tar -czf "chess-engine-${{ matrix.suffix }}.tar.gz" -C build chess-engine
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chess-engine-${{ matrix.suffix }}
+          path: chess-engine-${{ matrix.suffix }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/chess-engine-linux-x86_64/chess-engine-linux-x86_64.tar.gz
+            artifacts/chess-engine-macos/chess-engine-macos.tar.gz
+          generate_release_notes: true
