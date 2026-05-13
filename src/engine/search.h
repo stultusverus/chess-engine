@@ -32,6 +32,7 @@ public:
     Search();
 
     void setTimeMs(int ms);
+    void setTimeControlMs(int softMs, int hardMs);
     void setInfinite(bool inf);
     void setNodeLimit(uint64_t nodes);
     void setRootMoves(const std::vector<Move>& moves);
@@ -53,6 +54,7 @@ private:
     bool rootMoveAllowed(Move m) const;
     std::vector<Move> extractPv(Board board, Move bestMove, int maxDepth) const;
     int elapsedMs() const;
+    bool softTimeExpired() const;
 
     void ageHistory();
     void updateKiller(Move m, int ply);
@@ -60,7 +62,8 @@ private:
     bool shouldStop();
 
     // Time control
-    int timeMs_ = 0;
+    int softTimeMs_ = 0;
+    int hardTimeMs_ = 0;
     bool infinite_ = false;
     std::atomic<bool> stop_{false};
     std::chrono::steady_clock::time_point startTime_{};

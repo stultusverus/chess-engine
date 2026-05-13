@@ -14,7 +14,12 @@ Search::Search() {
 }
 
 void Search::setTimeMs(int ms) {
-    timeMs_ = ms;
+    setTimeControlMs(ms, ms);
+}
+
+void Search::setTimeControlMs(int softMs, int hardMs) {
+    softTimeMs_ = std::max(0, softMs);
+    hardTimeMs_ = std::max(softTimeMs_, hardMs);
     infinite_ = false;
     stop_.store(false);
     maxNodes_ = 0;
@@ -22,13 +27,16 @@ void Search::setTimeMs(int ms) {
 
 void Search::setInfinite(bool inf) {
     infinite_ = inf;
+    softTimeMs_ = 0;
+    hardTimeMs_ = 0;
     stop_.store(false);
     maxNodes_ = 0;
 }
 
 void Search::setNodeLimit(uint64_t nodes) {
     maxNodes_ = nodes;
-    timeMs_ = 0;
+    softTimeMs_ = 0;
+    hardTimeMs_ = 0;
     infinite_ = false;
     stop_.store(false);
 }
@@ -104,7 +112,7 @@ SearchResult Search::search(const Board& board, int maxDepth) {
             infoCallback_(result);
         }
 
-        if (shouldStop()) {
+        if (softTimeExpired() || shouldStop()) {
             break;
         }
     }
@@ -445,6 +453,10 @@ int Search::elapsedMs() const {
         std::chrono::steady_clock::now() - startTime_).count());
 }
 
+bool Search::softTimeExpired() const {
+    return !infinite_ && softTimeMs_ > 0 && elapsedMs() >= softTimeMs_;
+}
+
 void Search::ageHistory() {
     for (int i = 0; i < 64; i++)
         for (int j = 0; j < 64; j++)
@@ -472,10 +484,10 @@ bool Search::shouldStop() {
         stop_.store(true);
         return true;
     }
-    if (!infinite_ && timeMs_ > 0) {
+    if (!infinite_ && hardTimeMs_ > 0) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - startTime_).count();
-        if (elapsed >= timeMs_) {
+        if (elapsed >= hardTimeMs_) {
             stop_.store(true);
             return true;
         }

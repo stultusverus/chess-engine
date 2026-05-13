@@ -344,7 +344,8 @@ void UCI::handleGo(const std::string& line) {
     movetime = std::max(0, movetime);
 
     // Calculate time
-    int timeMs = 0;
+    int softTimeMs = 0;
+    int hardTimeMs = 0;
     int availableTime = 0;
     if (wtime > 0 || btime > 0) {
         availableTime = (board_.sideToMove() == WHITE) ? wtime : btime;
@@ -355,32 +356,37 @@ void UCI::handleGo(const std::string& line) {
     } else if (infinite) {
         search_.setInfinite(true);
     } else if (movetime >= 0 && std::find(tokens.begin(), tokens.end(), "movetime") != tokens.end()) {
-        timeMs = std::max(1, movetime);
+        softTimeMs = std::max(1, movetime);
+        hardTimeMs = softTimeMs;
     } else if (wtime > 0 || btime > 0) {
         int myTime = (board_.sideToMove() == WHITE) ? wtime : btime;
         int myInc = (board_.sideToMove() == WHITE) ? winc : binc;
         if (movestogo <= 0) movestogo = 30;
-        timeMs = myTime / movestogo + myInc;
-        // Safety margin
-        if (timeMs > myTime / 2) timeMs = myTime / 2;
+        softTimeMs = myTime / movestogo + myInc;
+        softTimeMs = std::min(softTimeMs, myTime / 2);
+        hardTimeMs = std::max(softTimeMs, std::min(myTime, std::max(softTimeMs * 3, softTimeMs + myInc + 50)));
     } else if (depth > 0 || mate > 0) {
         search_.setInfinite(true);
     } else {
-        timeMs = 3000; // Default
+        softTimeMs = 3000; // Default
+        hardTimeMs = softTimeMs;
     }
 
-    if (nodeLimit == 0 && !infinite && timeMs > 0 && moveOverheadMs_ > 0) {
-        timeMs = std::max(0, timeMs - moveOverheadMs_);
+    if (nodeLimit == 0 && !infinite && softTimeMs > 0 && moveOverheadMs_ > 0) {
+        softTimeMs = std::max(0, softTimeMs - moveOverheadMs_);
+        hardTimeMs = std::max(0, hardTimeMs - moveOverheadMs_);
     }
     if (nodeLimit == 0 && !infinite && availableTime > 0) {
         int hardCap = std::max(0, availableTime - moveOverheadMs_);
-        timeMs = std::min(timeMs, hardCap);
+        hardTimeMs = std::min(hardTimeMs, hardCap);
+        softTimeMs = std::min(softTimeMs, hardTimeMs);
     }
-    if (nodeLimit == 0 && !infinite && timeMs <= 0) {
-        timeMs = 1;
+    if (nodeLimit == 0 && !infinite && softTimeMs <= 0) {
+        softTimeMs = 1;
     }
     if (nodeLimit == 0 && !infinite) {
-        search_.setTimeMs(timeMs);
+        hardTimeMs = std::max(softTimeMs, hardTimeMs);
+        search_.setTimeControlMs(softTimeMs, hardTimeMs);
     }
 
     // Probe opening book

@@ -305,6 +305,28 @@ void test_nodeLimitStopsSearch() {
     CHECK(result.depth < 64);
 }
 
+void test_softTimeLimitStopsBetweenDepths() {
+    chess::Search search;
+    chess::Board b;
+    search.setTimeControlMs(1, 500);
+
+    auto result = search.search(b, 64);
+    CHECK(result.bestMove.from != chess::SQ_NONE);
+    CHECK(result.nodes > 0);
+    CHECK(result.depth >= 1);
+    CHECK(result.depth < 64);
+}
+
+void test_hardTimeLimitStopsSearch() {
+    chess::Search search;
+    chess::Board b;
+    search.setTimeControlMs(0, 1);
+
+    auto result = search.search(b, 64);
+    CHECK(result.nodes > 0);
+    CHECK(result.depth < 64);
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -332,6 +354,8 @@ int main() {
     RUN_TEST(rootMoveRestriction);
     RUN_TEST(rootMoveRestrictionIgnoresRootTTHit);
     RUN_TEST(nodeLimitStopsSearch);
+    RUN_TEST(softTimeLimitStopsBetweenDepths);
+    RUN_TEST(hardTimeLimitStopsSearch);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;
