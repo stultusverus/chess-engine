@@ -19,8 +19,11 @@ struct TTEntry {
     uint64_t hash;
     int32_t score;
     int8_t depth;
-    uint8_t bound;
+    uint8_t metadata; // low 2 bits: Bound, high 6 bits: generation
     uint16_t move; // packed: from | (to << 6) | (promotion << 12)
+
+    Bound bound() const { return static_cast<Bound>(metadata & 0x03); }
+    uint8_t generation() const { return metadata >> 2; }
 };
 #pragma pack(pop)
 
@@ -41,6 +44,7 @@ public:
 
     void setSize(int mb);
     void clear();
+    void newSearch();
 
     // Returns pointer to entry, nullptr if not found
     const TTEntry* probe(uint64_t hash) const;
@@ -53,10 +57,12 @@ public:
     static Move unpackMove(uint16_t packed);
 
     int size() const { return static_cast<int>(clusters_.size() * TT_CLUSTER_SIZE); }
+    uint8_t generation() const { return generation_; }
     int hashFull() const; // Approximate permille usage
 
 private:
     std::vector<TTCluster> clusters_;
+    uint8_t generation_ = 0;
 };
 
 } // namespace chess

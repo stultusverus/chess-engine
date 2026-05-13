@@ -99,6 +99,7 @@ SearchResult Search::search(const Board& board, int maxDepth) {
     nodes_ = 0;
     bestMoveRoot_ = Move();
     nodesLimit_ = 1024;
+    tt_.newSearch();
     std::fill(std::begin(ttMoveByPly_), std::end(ttMoveByPly_), Move());
     std::fill(std::begin(continuationPieceByPly_), std::end(continuationPieceByPly_), NO_PIECE);
     std::fill(std::begin(continuationToByPly_), std::end(continuationToByPly_), SQ_NONE);
@@ -194,15 +195,15 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         else if (ttScore < -MATE + MAX_PLY) ttScore += ply;
 
         if (!restrictedRoot && depth > 0 && ttEntry->depth >= depth) {
-            if (ttEntry->bound == static_cast<uint8_t>(Bound::EXACT)) {
+            if (ttEntry->bound() == Bound::EXACT) {
                 if (ply == 0 && ttMove.from != SQ_NONE) bestMoveRoot_ = ttMove;
                 return ttScore;
             }
-            if (ttEntry->bound == static_cast<uint8_t>(Bound::LOWER) && ttScore >= beta) {
+            if (ttEntry->bound() == Bound::LOWER && ttScore >= beta) {
                 if (ply == 0 && ttMove.from != SQ_NONE) bestMoveRoot_ = ttMove;
                 return ttScore;
             }
-            if (ttEntry->bound == static_cast<uint8_t>(Bound::UPPER) && ttScore <= alpha)
+            if (ttEntry->bound() == Bound::UPPER && ttScore <= alpha)
                 return ttScore;
         }
     }

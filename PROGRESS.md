@@ -8,7 +8,7 @@
 - [x] `src/engine/movegen.h/cpp` — Magic bitboard move generation, legal move filtering. Perft-verified
 - [x] `src/engine/eval.h/cpp` — Tapered evaluation with PeSTO piece-square tables (MG/EG)
 - [x] `src/engine/search.h/cpp` — Alpha-beta with PVS, iterative deepening, quiescence, LMR, null move pruning (zugzwang guard), killer/history heuristic
-- [x] `src/engine/tt.h/cpp` — Transposition table (always-replace, 16B entries)
+- [x] `src/engine/tt.h/cpp` — 4-way clustered, generation-aware transposition table (16B entries)
 - [x] `src/engine/book.h/cpp` — Polyglot opening book loader (.bin format, weighted random selection)
 - [x] `src/engine/uci.h/cpp` — UCI protocol (position, go, stop, setoption, time management, WDL support)
 - [x] `src/engine/poly_keys.h` — Polyglot Zobrist key constants (header-only)
@@ -65,14 +65,14 @@
 - [x] Improve search tuning with better LMR, reverse futility/razoring, continuation history, and capture history.
 - [ ] Add a staged move picker: TT move, good captures/promotions, killers/countermoves, quiet history, then bad captures.
 - [ ] Avoid eager SEE for every capture during full move sorting; compute SEE lazily where possible.
-- [ ] Upgrade TT replacement with 2-way/4-way clustered buckets and generation/age.
+- [x] Upgrade TT replacement with 2-way/4-way clustered buckets and generation/age.
 - [ ] Store static evaluation in TT entries if it improves pruning/eval reuse.
 - [x] Add machine-readable JSON speed and tactical benchmark modes around fixed positions and EPD suites.
 - [x] Add optional slow perft assertions behind `CHESS_ENGINE_SLOW_TESTS`.
 - [x] Add deterministic make/unmake invariant tests comparing FEN, hash, pawn hash, eval state, and generated move legality.
 - [x] Add fixed-seed pseudo-random make/unmake invariant tests for broader generated-position coverage.
 - [x] Upgrade TT replacement to 4-way clustered buckets with depth/exact-preferred replacement.
-- [ ] Add TT generation/age.
+- [x] Add TT generation/age.
 
 ## Strategic Backlog
 

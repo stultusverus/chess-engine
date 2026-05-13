@@ -103,6 +103,60 @@ void test_ttDepthPreferredReplacement() {
     CHECK(chess::TranspositionTable::unpackMove(replacement->move).from == chess::B2);
 }
 
+void test_ttStoresGenerationMetadata() {
+    chess::TranspositionTable tt;
+    tt.setSize(1);
+    CHECK(tt.generation() == 0);
+
+    tt.newSearch();
+    chess::Move move(chess::A2, chess::A4);
+    tt.store(0x1234000000000001ULL, 12, 3, chess::Bound::LOWER, move);
+
+    const chess::TTEntry* entry = tt.probe(0x1234000000000001ULL);
+    CHECK(entry != nullptr);
+    CHECK(entry->bound() == chess::Bound::LOWER);
+    CHECK(entry->generation() == tt.generation());
+    CHECK(sizeof(chess::TTEntry) == 16);
+
+    tt.clear();
+    CHECK(tt.generation() == 0);
+    CHECK(tt.probe(0x1234000000000001ULL) == nullptr);
+}
+
+void test_ttAgedEntriesAreReplacedFirst() {
+    chess::TranspositionTable tt;
+    tt.setSize(1);
+
+    uint64_t oldHash = 0x1111000000000001ULL;
+    uint64_t freshAHash = 0x2222000000000001ULL;
+    uint64_t freshBHash = 0x3333000000000001ULL;
+    uint64_t freshCHash = 0x4444000000000001ULL;
+    uint64_t replacementHash = 0x5555000000000001ULL;
+
+    tt.newSearch();
+    tt.store(oldHash, 10, 4, chess::Bound::LOWER, chess::Move(chess::A2, chess::A3));
+
+    tt.newSearch();
+    tt.store(freshAHash, 20, 4, chess::Bound::LOWER, chess::Move(chess::B2, chess::B3));
+    tt.store(freshBHash, 30, 4, chess::Bound::LOWER, chess::Move(chess::C2, chess::C3));
+    tt.store(freshCHash, 40, 4, chess::Bound::LOWER, chess::Move(chess::D2, chess::D3));
+
+    CHECK(tt.probe(oldHash) != nullptr);
+    CHECK(tt.probe(freshAHash) != nullptr);
+    CHECK(tt.probe(freshBHash) != nullptr);
+    CHECK(tt.probe(freshCHash) != nullptr);
+
+    tt.store(replacementHash, 50, 4, chess::Bound::LOWER, chess::Move(chess::E2, chess::E3));
+
+    CHECK(tt.probe(oldHash) == nullptr);
+    CHECK(tt.probe(freshAHash) != nullptr);
+    CHECK(tt.probe(freshBHash) != nullptr);
+    CHECK(tt.probe(freshCHash) != nullptr);
+    const chess::TTEntry* replacement = tt.probe(replacementHash);
+    CHECK(replacement != nullptr);
+    CHECK(replacement->generation() == tt.generation());
+}
+
 void test_ttSizeDoesNotExceedRequestedMb() {
     chess::TranspositionTable tt;
     tt.setSize(3);
@@ -360,6 +414,8 @@ int main() {
     RUN_TEST(ttMovePackingPromotion);
     RUN_TEST(ttStoresMateScaleScore);
     RUN_TEST(ttDepthPreferredReplacement);
+    RUN_TEST(ttStoresGenerationMetadata);
+    RUN_TEST(ttAgedEntriesAreReplacedFirst);
     RUN_TEST(ttSizeDoesNotExceedRequestedMb);
     RUN_TEST(mateInOneAtDepth1);
     RUN_TEST(mateInOne);

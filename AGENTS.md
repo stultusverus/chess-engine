@@ -77,12 +77,12 @@ The latest correctness review fixes are now part of the codebase and should rema
 - Serial `MultiPV` searches use a shared time origin for time-managed searches.
 - Internal iterative deepening is restricted to deeper PV nodes.
 - Unsupported `go ponder` returns `bestmove 0000` with an `info string` diagnostic.
-- Transposition table storage uses 4-way clustered buckets with depth/exact-preferred replacement.
+- Transposition table storage uses 4-way clustered buckets with depth/exact/generation-aware replacement.
 
 Current high-value performance work:
 
 - Add a staged move picker and compute SEE lazily instead of scoring every move up front.
-- Improve TT quality further with generation/age and optionally static eval storage.
+- Improve TT quality further with optional static eval storage if profiling shows reuse gains.
 - Add automated eval tuning before expanding hand-tuned classical terms.
 - Extend benchmark coverage with fixed-node/depth tactical EPD and speed suites.
 

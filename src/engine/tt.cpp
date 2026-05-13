@@ -4,22 +4,35 @@ namespace chess {
 namespace {
 
 constexpr int EXACT_BOUND_BONUS = 8;
+constexpr int AGE_PENALTY = 4;
+constexpr uint8_t TT_BOUND_MASK = 0x03;
+constexpr uint8_t TT_GENERATION_MASK = 0x3F;
 
 int replacementPriority(int8_t depth, Bound bound) {
     return int(depth) * 2 + (bound == Bound::EXACT ? EXACT_BOUND_BONUS : 0);
 }
 
-int replacementPriority(const TTEntry& entry) {
-    Bound bound = static_cast<Bound>(entry.bound);
-    return replacementPriority(entry.depth, bound);
+int entryAge(const TTEntry& entry, uint8_t currentGeneration) {
+    return (currentGeneration + TT_GENERATION_MASK + 1 - entry.generation()) &
+           TT_GENERATION_MASK;
+}
+
+int replacementPriority(const TTEntry& entry, uint8_t currentGeneration) {
+    return replacementPriority(entry.depth, entry.bound()) -
+           entryAge(entry, currentGeneration) * AGE_PENALTY;
+}
+
+uint8_t makeMetadata(Bound bound, uint8_t generation) {
+    return static_cast<uint8_t>(((generation & TT_GENERATION_MASK) << 2) |
+                                (static_cast<uint8_t>(bound) & TT_BOUND_MASK));
 }
 
 void writeEntry(TTEntry& entry, uint64_t hash, int score, int8_t depth,
-                Bound bound, Move move) {
+                Bound bound, Move move, uint8_t generation) {
     entry.hash = hash;
     entry.score = score;
     entry.depth = depth;
-    entry.bound = static_cast<uint8_t>(bound);
+    entry.metadata = makeMetadata(bound, generation);
     entry.move = TranspositionTable::packMove(move);
 }
 
@@ -44,8 +57,13 @@ void TranspositionTable::setSize(int mb) {
 }
 
 void TranspositionTable::clear() {
+    generation_ = 0;
     for (TTCluster& cluster : clusters_)
         cluster.entries.fill(TTEntry{0, 0, 0, 0, 0});
+}
+
+void TranspositionTable::newSearch() {
+    generation_ = (generation_ + 1) & TT_GENERATION_MASK;
 }
 
 const TTEntry* TranspositionTable::probe(uint64_t hash) const {
@@ -69,29 +87,31 @@ void TranspositionTable::store(uint64_t hash, int score, int8_t depth, Bound bou
     for (TTEntry& entry : cluster.entries) {
         if (entry.hash != hash)
             continue;
-        if (entry.depth > depth && bound != Bound::EXACT)
+        if (entry.depth > depth && bound != Bound::EXACT) {
+            entry.metadata = makeMetadata(entry.bound(), generation_);
             return;
-        writeEntry(entry, hash, score, depth, bound, move);
+        }
+        writeEntry(entry, hash, score, depth, bound, move, generation_);
         return;
     }
 
     for (TTEntry& entry : cluster.entries) {
         if (entry.hash == 0) {
-            writeEntry(entry, hash, score, depth, bound, move);
+            writeEntry(entry, hash, score, depth, bound, move, generation_);
             return;
         }
     }
 
     TTEntry* victim = &cluster.entries[0];
     for (TTEntry& entry : cluster.entries) {
-        if (replacementPriority(entry) < replacementPriority(*victim))
+        if (replacementPriority(entry, generation_) < replacementPriority(*victim, generation_))
             victim = &entry;
     }
 
-    if (replacementPriority(depth, bound) < replacementPriority(*victim))
+    if (replacementPriority(depth, bound) < replacementPriority(*victim, generation_))
         return;
 
-    writeEntry(*victim, hash, score, depth, bound, move);
+    writeEntry(*victim, hash, score, depth, bound, move, generation_);
 }
 
 int TranspositionTable::hashFull() const {
