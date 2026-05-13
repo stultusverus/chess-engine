@@ -22,6 +22,12 @@ bool sameMove(Move a, Move b) {
     return a.from == b.from && a.to == b.to && a.promotion == b.promotion;
 }
 
+bool hasNonPawnMaterial(const Board& board, Color side) {
+    Bitboard pieces = board.pieces(side);
+    Bitboard pawnsAndKing = board.pieces(side, PAWN) | board.pieces(side, KING);
+    return pieces != pawnsAndKing;
+}
+
 } // namespace
 
 Search::Search() {
@@ -199,9 +205,21 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     }
 
     if (depth <= 0) return quiesce(board, alpha, beta, ply);
+    bool inCheck = board.isInCheck();
+    bool pvNode = beta - alpha > 1;
+    if (inCheck) depth++;
+
+    int staticEval = -INF;
+    auto currentStaticEval = [&]() {
+        if (staticEval == -INF) {
+            staticEval = eval_.evaluate(board);
+            if (board.sideToMove() == BLACK) staticEval = -staticEval;
+        }
+        return staticEval;
+    };
 
     // Null move pruning (skip when searching mate lines)
-    if (depth >= 4 && !board.isInCheck() && beta < MATE - MAX_PLY) {
+    if (depth >= 4 && !inCheck && beta < MATE - MAX_PLY) {
         Bitboard stmAll = board.pieces(board.sideToMove());
         Bitboard stmPawnKing = board.pieces(board.sideToMove(), KING) | board.pieces(board.sideToMove(), PAWN);
         if (stmAll != stmPawnKing) {
@@ -227,11 +245,27 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         moves = filtered;
     }
 
-    bool inCheck = board.isInCheck();
-    if (inCheck) depth++;
-
     if (moves.size() == 0) {
         return inCheck ? -MATE + ply : 0;
+    }
+
+    if (ply > 0 && !pvNode && !inCheck &&
+        alpha > -MATE + MAX_PLY && beta < MATE - MAX_PLY) {
+        int eval = currentStaticEval();
+        if (depth <= 3 && hasNonPawnMaterial(board, board.sideToMove())) {
+            int margin = 120 * depth;
+            if (eval - margin >= beta)
+                return eval - margin;
+        }
+
+        if (depth <= 2) {
+            int margin = 300 + 100 * depth;
+            if (eval + margin <= alpha) {
+                int qScore = quiesce(board, alpha, beta, ply);
+                if (qScore <= alpha)
+                    return qScore;
+            }
+        }
     }
 
     // Try TT move first
@@ -249,7 +283,6 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     int bestScore = -INF;
     int movesMade = 0;
     Move bestMoveInNode;
-    int staticEval = -INF;
     Move quietsTried[MAX_MOVES]{};
     Piece quietPiecesTried[MAX_MOVES]{};
     int quietsTriedCount = 0;
@@ -262,18 +295,16 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         // Futility pruning
         if (depth <= 2 && !inCheck && movesMade >= 1 &&
             !isCaptureMove(m) && m.type != PROMOTION) {
-            if (staticEval == -INF) {
-                staticEval = eval_.evaluate(board);
-                if (board.sideToMove() == BLACK) staticEval = -staticEval;
-            }
             int margin = (depth == 1) ? 200 : 600;
-            if (staticEval + margin < alpha) continue;
+            if (currentStaticEval() + margin < alpha) continue;
         }
 
         Piece movedPiece = board.pieceOn(m.from);
         PieceType capturedType = capturedTypeForMove(board, m);
+        int moveOrderingScore = isQuietHistoryMove(m) ? scoreMove(board, m, ply) : 0;
         UndoInfo undo;
         if (!board.makeMove(m, undo)) continue;
+        bool givesCheck = board.isInCheck();
 
         if (isQuietHistoryMove(m)) {
             setContinuationContext(ply + 1, movedPiece, m);
@@ -298,9 +329,17 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         } else {
             // Late-move reductions (LMR): reduce moves beyond the first few
             int reduction = 0;
-            if (depth >= 3 && movesMade >= 4 && isQuietHistoryMove(m)) {
+            if (depth >= 3 && isQuietHistoryMove(m) && !inCheck && !givesCheck &&
+                movesMade >= (pvNode ? 4 : 3)) {
                 reduction = 1;
-                if (movesMade >= 8) reduction = 2;
+                if (depth >= 6) reduction++;
+                if (movesMade >= 8) reduction++;
+                if (!pvNode) reduction++;
+                if (moveOrderingScore >= KILLER_SCORE || moveOrderingScore > HISTORY_MAX / 2)
+                    reduction--;
+                else if (moveOrderingScore < -HISTORY_MAX / 4)
+                    reduction++;
+                reduction = std::clamp(reduction, 0, depth - 2);
             }
             score = -alphaBeta(board, depth - 1 - reduction, -alpha - 1, -alpha, ply + 1);
             if (score > alpha && reduction > 0) {
