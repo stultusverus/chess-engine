@@ -194,7 +194,7 @@ void test_mateScoresUseUciMateFormat() {
 void test_repetitionIsScoredAsDraw() {
     std::string output = runEngineWithDelayedQuit(
         "position startpos moves g1f3 g8f6 f3g1 f6g8 g1f3 g8f6 f3g1 f6g8\n"
-        "go depth 1\n");
+        "go movetime 1\n");
 
     // Expected: the third occurrence of the same position is scored as a draw.
     CHECK(scoreField(lastInfoLine(output)) == "score cp 0");
@@ -285,6 +285,7 @@ void test_uciDoesNotAdvertisePonder() {
     CHECK(contains(output, "id name ChessEngine "));
     CHECK(!contains(output, "option name Ponder"));
     CHECK(contains(output, "option name Book Max Ply"));
+    CHECK(contains(output, "option name Book Random"));
     CHECK(contains(output, "uciok"));
 }
 

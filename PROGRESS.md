@@ -55,6 +55,7 @@
 - [x] Restrict broad internal iterative deepening to deeper PV nodes.
 - [x] Reject unsupported `go ponder` with an `info string` diagnostic and `bestmove 0000`.
 - [x] Add UCI `Book Max Ply` to configure the opening-book cutoff.
+- [x] Add UCI `Book Random` to allow deterministic highest-weight book selection.
 
 ## Performance Backlog
 
