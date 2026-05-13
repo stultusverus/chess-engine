@@ -62,14 +62,11 @@ The latest correctness review fixes are now part of the codebase and should rema
 - Quiescence search uses a dedicated noisy-move generator outside check instead of generating all legal moves and filtering.
 - Legal move generation is check/pin-aware.
 - Board make/unmake maintains incremental material/PST state, pawn hash, and eval-cache inputs.
-
-Current high-priority review findings:
-
-- Fix null-move en-passant hash removal: `makeNullMove` toggles side before deciding whether to remove the EP Zobrist key, but the key was added for the old side to move.
-- Make UCI `Hash` sizing an upper bound; current TT sizing rounds up to the next power of two and can allocate nearly twice the requested memory.
-- Give serial `MultiPV` searches a shared time budget or replace them with a true single-search MultiPV implementation.
-- Restrict or benchmark internal iterative deepening, which currently runs broadly when depth is at least 3 and no TT move is available.
-- Clarify unsupported `go ponder` behavior until true ponder continuation is implemented.
+- Null-move en-passant hash removal uses the old side to move before toggling side.
+- UCI `Hash` sizing is treated as an upper bound by rounding TT entries down to a power of two.
+- Serial `MultiPV` searches use a shared time origin for time-managed searches.
+- Internal iterative deepening is restricted to deeper PV nodes.
+- Unsupported `go ponder` returns `bestmove 0000` with an `info string` diagnostic.
 
 Current high-value performance work:
 

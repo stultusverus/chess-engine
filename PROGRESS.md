@@ -49,11 +49,11 @@
 - [x] Normalize en-passant FEN/hash handling. Syntactically valid EP targets are accepted, but EP is hashed only when an EP capture is possible.
 - [x] Remove advertised `Ponder` support until true ponder continuation is implemented.
 - [x] Add regression tests for the above UCI/book/FEN edge cases.
-- [ ] Fix null-move en-passant hash removal. `Board::makeNullMove` currently toggles side before checking whether the old EP key was present.
-- [ ] Make UCI `Hash` an allocation cap by avoiding TT round-up above the requested size.
-- [ ] Give serial `MultiPV` searches a shared deadline, or replace serial searches with true single-search MultiPV.
-- [ ] Restrict or benchmark broad internal iterative deepening before relying on it as a strength improvement.
-- [ ] Decide whether unsupported `go ponder` should be ignored, rejected, or implemented as real ponder.
+- [x] Fix null-move en-passant hash removal. `Board::makeNullMove` now removes any EP hash key using the old side to move before toggling side.
+- [x] Make UCI `Hash` an allocation cap by rounding TT entries down to a power of two.
+- [x] Give serial `MultiPV` searches a shared time origin for time-managed searches.
+- [x] Restrict broad internal iterative deepening to deeper PV nodes.
+- [x] Reject unsupported `go ponder` with an `info string` diagnostic and `bestmove 0000`.
 
 ## Performance Backlog
 

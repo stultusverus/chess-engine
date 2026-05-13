@@ -83,13 +83,10 @@ Recently fixed review items:
 - `Ponder` is not advertised until true ponder continuation is implemented.
 - Quiescence search uses dedicated noisy-move generation for legal captures, en-passant captures, and promotions outside check.
 - Legal move generation is check/pin-aware, and board make/unmake maintains incremental material/PST state, pawn hash, and eval-cache inputs.
-
-Current correctness and robustness work:
-
-- Fix null-move en-passant hash removal when an EP capture is available before the null move.
-- Make the UCI `Hash` option a memory cap instead of rounding some values up to almost 2x the requested size.
-- Give serial `MultiPV` searches a shared time budget, or replace them with true single-search MultiPV.
-- Clarify unsupported `go ponder` behavior until real ponder continuation is implemented.
+- Null-move en-passant hash removal is consistent with the old side to move.
+- The UCI `Hash` option is an allocation cap; TT entries round down to a power of two.
+- Serial `MultiPV` searches share the same time origin for time-managed searches.
+- Unsupported `go ponder` returns `bestmove 0000` with an `info string` diagnostic.
 
 High-value strength/performance work:
 

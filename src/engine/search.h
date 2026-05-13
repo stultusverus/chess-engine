@@ -35,6 +35,8 @@ public:
     void setTimeControlMs(int softMs, int hardMs);
     void setInfinite(bool inf);
     void setNodeLimit(uint64_t nodes);
+    void setTimeStartOverride(std::chrono::steady_clock::time_point startTime);
+    void clearTimeStartOverride();
     void setRootMoves(const std::vector<Move>& moves);
     void clearRootMoves();
     void setInfoCallback(std::function<void(const SearchResult&)> callback);
@@ -72,6 +74,8 @@ private:
     bool infinite_ = false;
     std::atomic<bool> stop_{false};
     std::chrono::steady_clock::time_point startTime_{};
+    std::chrono::steady_clock::time_point startTimeOverride_{};
+    bool useStartTimeOverride_ = false;
     uint64_t nodes_ = 0;
     uint64_t nodesLimit_ = 0;
     uint64_t maxNodes_ = 0;

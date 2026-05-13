@@ -304,6 +304,23 @@ void test_enPassantFenAllowsUncapturableTargetWithoutHashingIt() {
     CHECK(withEp.hash() == withoutEp.hash());
 }
 
+void test_nullMoveClearsCapturableEpHash() {
+    chess::Board b("4k3/8/8/8/3pP3/8/8/4K3 b - e3 0 1");
+    chess::Board expectedNull("4k3/8/8/8/3pP3/8/8/4K3 w - - 1 1");
+    uint64_t startHash = b.hash();
+    chess::NullUndo undo;
+
+    b.makeNullMove(undo);
+    CHECK(b.enPassant() == chess::SQ_NONE);
+    CHECK(b.sideToMove() == chess::WHITE);
+    CHECK(b.hash() == expectedNull.hash());
+
+    b.unmakeNullMove(undo);
+    CHECK(b.hash() == startHash);
+    CHECK(b.enPassant() == chess::E3);
+    CHECK(b.sideToMove() == chess::BLACK);
+}
+
 void test_promotion() {
     std::string fen = "8/P7/8/8/8/8/8/k6K w - - 0 1";
     chess::Board b(fen);
@@ -379,6 +396,7 @@ int main() {
     RUN_TEST(invalidFenFieldsRejected);
     RUN_TEST(validEnPassantFenRequiresCapturablePawn);
     RUN_TEST(enPassantFenAllowsUncapturableTargetWithoutHashingIt);
+    RUN_TEST(nullMoveClearsCapturableEpHash);
     RUN_TEST(promotion);
     RUN_TEST(invalidPromotionsRejected);
     RUN_TEST(malformedFenHandledSafely);

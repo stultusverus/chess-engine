@@ -256,14 +256,15 @@ void test_bookMoveRespectsSearchMoves() {
     CHECK(contains(output, "bestmove a2a3"));
 }
 
-void test_ponderHitReturnsBestMove() {
+void test_goPonderIsRejected() {
     std::string output = runEngineWithDelayedInput(
         "position startpos\n"
         "go ponder\n",
         "ponderhit\nquit\n",
         "0.1");
 
-    CHECK(contains(output, "bestmove "));
+    CHECK(contains(output, "unsupported ponder"));
+    CHECK(contains(output, "bestmove 0000"));
 }
 
 void test_uciDoesNotAdvertisePonder() {
@@ -369,7 +370,7 @@ int main() {
     RUN_TEST(goSearchMovesRestrictsRootMove);
     RUN_TEST(searchMovesRestrictionSurvivesPreviousTTHit);
     RUN_TEST(bookMoveRespectsSearchMoves);
-    RUN_TEST(ponderHitReturnsBestMove);
+    RUN_TEST(goPonderIsRejected);
     RUN_TEST(uciDoesNotAdvertisePonder);
     RUN_TEST(lowClockKeepsInternalMoveOverhead);
     RUN_TEST(movetimeIgnoresMoveOverhead);

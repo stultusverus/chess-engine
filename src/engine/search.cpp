@@ -45,6 +45,7 @@ void Search::setTimeControlMs(int softMs, int hardMs) {
     infinite_ = false;
     stop_.store(false);
     maxNodes_ = 0;
+    clearTimeStartOverride();
 }
 
 void Search::setInfinite(bool inf) {
@@ -53,6 +54,7 @@ void Search::setInfinite(bool inf) {
     hardTimeMs_ = 0;
     stop_.store(false);
     maxNodes_ = 0;
+    clearTimeStartOverride();
 }
 
 void Search::setNodeLimit(uint64_t nodes) {
@@ -61,6 +63,16 @@ void Search::setNodeLimit(uint64_t nodes) {
     hardTimeMs_ = 0;
     infinite_ = false;
     stop_.store(false);
+    clearTimeStartOverride();
+}
+
+void Search::setTimeStartOverride(std::chrono::steady_clock::time_point startTime) {
+    startTimeOverride_ = startTime;
+    useStartTimeOverride_ = true;
+}
+
+void Search::clearTimeStartOverride() {
+    useStartTimeOverride_ = false;
 }
 
 void Search::setRootMoves(const std::vector<Move>& moves) {
@@ -92,7 +104,7 @@ SearchResult Search::search(const Board& board, int maxDepth) {
     std::fill(std::begin(continuationToByPly_), std::end(continuationToByPly_), SQ_NONE);
     ageHistory();
 
-    startTime_ = std::chrono::steady_clock::now();
+    startTime_ = useStartTimeOverride_ ? startTimeOverride_ : std::chrono::steady_clock::now();
     Board rootBoard = board;
 
     for (int depth = 1; depth <= maxDepth && depth < MAX_PLY - 20; depth++) {
@@ -195,7 +207,8 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         }
     }
 
-    if (depth >= 3 && ttMove.from == SQ_NONE) {
+    bool pvNode = beta - alpha > 1;
+    if (depth >= 5 && pvNode && ttMove.from == SQ_NONE) {
         alphaBeta(board, depth - 2, alpha, beta, ply);
         const TTEntry* newEntry = tt_.probe(hash);
         if (newEntry) {
@@ -206,7 +219,6 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
 
     if (depth <= 0) return quiesce(board, alpha, beta, ply);
     bool inCheck = board.isInCheck();
-    bool pvNode = beta - alpha > 1;
     if (inCheck) depth++;
 
     int staticEval = -INF;

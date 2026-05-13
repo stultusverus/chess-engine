@@ -5,6 +5,7 @@
 #include "engine/version.h"
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -270,7 +271,6 @@ void UCI::handleGo(const std::string& line) {
     int movestogo = 0, depth = 0, movetime = 0, mate = 0;
     uint64_t nodeLimit = 0;
     bool infinite = false;
-    bool ponder = false;
     bool unsupportedPonder = false;
     std::vector<Move> searchMoves;
 
@@ -356,6 +356,12 @@ void UCI::handleGo(const std::string& line) {
     winc = std::max(0, winc);
     binc = std::max(0, binc);
     movetime = std::max(0, movetime);
+
+    if (unsupportedPonder) {
+        std::cout << "info string unsupported ponder" << std::endl;
+        std::cout << "bestmove 0000" << std::endl;
+        return;
+    }
 
     // Calculate time
     int softTimeMs = 0;
@@ -451,8 +457,9 @@ void UCI::handleGo(const std::string& line) {
     Board searchBoard = board_;
     bool showWdl = showWdl_;
     int multiPv = multiPv_;
-    pondering_.store(ponder);
+    pondering_.store(false);
     search_.setRootMoves(searchMoves);
+    auto sharedSearchStart = std::chrono::steady_clock::now();
     if (multiPv <= 1) {
         search_.setInfoCallback([showWdl](const SearchResult& result) {
             emitSearchInfo(result, showWdl);
@@ -462,7 +469,7 @@ void UCI::handleGo(const std::string& line) {
     }
     searchRunning_.store(true);
     bool hasRootMoves = !searchMoves.empty();
-    searchThread_ = std::thread([this, searchBoard, maxDepth, hasRootMoves, showWdl, multiPv, searchMoves]() mutable {
+    searchThread_ = std::thread([this, searchBoard, maxDepth, hasRootMoves, showWdl, multiPv, searchMoves, sharedSearchStart]() mutable {
         SearchResult result{};
         if (multiPv <= 1) {
             result = search_.search(searchBoard, maxDepth);
@@ -488,9 +495,12 @@ void UCI::handleGo(const std::string& line) {
             }
 
             int lines = std::min(multiPv, static_cast<int>(remaining.size()));
-            for (int line = 1; line <= lines && !remaining.empty(); line++) {
+            search_.setTimeStartOverride(sharedSearchStart);
+            for (int line = 1; line <= lines && !remaining.empty() && !search_.isStopped(); line++) {
                 search_.setRootMoves(remaining);
                 SearchResult lineResult = search_.search(searchBoard, maxDepth);
+                if (lineResult.bestMove.from == SQ_NONE || lineResult.bestMove.to == SQ_NONE)
+                    break;
                 emitSearchInfo(lineResult, showWdl, line);
                 if (line == 1)
                     result = lineResult;
@@ -502,6 +512,7 @@ void UCI::handleGo(const std::string& line) {
                                move.promotion == lineResult.bestMove.promotion;
                     }), remaining.end());
             }
+            search_.clearTimeStartOverride();
         }
         if (!hasRootMoves && (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE)) {
             MoveList moves;

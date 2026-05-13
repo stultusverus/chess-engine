@@ -90,6 +90,16 @@ void test_ttDepthPreferredReplacement() {
     CHECK(chess::TranspositionTable::unpackMove(replacement->move).from == chess::B2);
 }
 
+void test_ttSizeDoesNotExceedRequestedMb() {
+    chess::TranspositionTable tt;
+    tt.setSize(3);
+
+    size_t requestedBytes = 3ULL * 1024ULL * 1024ULL;
+    size_t allocatedBytes = static_cast<size_t>(tt.size()) * sizeof(chess::TTEntry);
+    CHECK(allocatedBytes <= requestedBytes);
+    CHECK(tt.size() > 0);
+}
+
 // Back-rank mate in 1: Rd1-d8#
 void test_mateInOneAtDepth1() {
     chess::Search search;
@@ -337,6 +347,7 @@ int main() {
     RUN_TEST(ttMovePackingPromotion);
     RUN_TEST(ttStoresMateScaleScore);
     RUN_TEST(ttDepthPreferredReplacement);
+    RUN_TEST(ttSizeDoesNotExceedRequestedMb);
     RUN_TEST(mateInOneAtDepth1);
     RUN_TEST(mateInOne);
     RUN_TEST(captureHangingQueen);

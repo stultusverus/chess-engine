@@ -4,14 +4,16 @@
 namespace chess {
 
 void TranspositionTable::setSize(int mb) {
+    if (mb < 1) mb = 1;
+
     // Compute number of entries from MB (16 bytes per entry)
     size_t bytes = static_cast<size_t>(mb) * 1024 * 1024;
     size_t entryCount = bytes / sizeof(TTEntry);
     if (entryCount < 1024) entryCount = 1024;
 
-    // Round to power of 2
+    // Round down so the UCI Hash option remains an allocation cap.
     size_t pow2 = 1;
-    while (pow2 < entryCount) pow2 <<= 1;
+    while (pow2 <= entryCount / 2) pow2 <<= 1;
     entries_.resize(pow2);
 
     clear();
