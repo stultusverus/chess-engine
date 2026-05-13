@@ -35,7 +35,7 @@ public:
     // Returns pointer to entry, nullptr if not found
     const TTEntry* probe(uint64_t hash) const;
 
-    // Store entry (always replace)
+    // Store entry using depth-preferred replacement.
     void store(uint64_t hash, int score, int8_t depth, Bound bound, Move move);
 
     // Pack/Unpack move

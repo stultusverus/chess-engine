@@ -94,6 +94,18 @@ bool moveAllowedByRootMoves(Move move, const std::vector<Move>& rootMoves) {
     return false;
 }
 
+std::optional<Move> firstAllowedLegalMove(Board board, const std::vector<Move>& rootMoves) {
+    MoveList legalMoves;
+    MoveGenerator gen;
+    gen.generateLegalMoves(board, legalMoves);
+
+    for (Move move : legalMoves) {
+        if (moveAllowedByRootMoves(move, rootMoves))
+            return move;
+    }
+    return std::nullopt;
+}
+
 void emitSearchInfo(const SearchResult& result, bool showWdl, int multiPvIndex = 0) {
     std::cout << "info depth " << result.depth;
     if (multiPvIndex > 0)
@@ -129,6 +141,8 @@ void emitSearchInfo(const SearchResult& result, bool showWdl, int multiPvIndex =
 
 } // namespace
 
+static constexpr int MIN_CLOCK_OVERHEAD_MS = 50;
+
 UCI::UCI() {
     attacks::init();
     Board::initZobrist();
@@ -163,7 +177,7 @@ void UCI::handleUci() {
     std::cout << "id name ChessEngine " << CHESS_ENGINE_VERSION << std::endl;
     std::cout << "id author chess-engine" << std::endl;
     std::cout << "option name Hash type spin default 64 min 1 max 4096" << std::endl;
-    std::cout << "option name Move Overhead type spin default 0 min 0 max 5000" << std::endl;
+    std::cout << "option name Move Overhead type spin default 50 min 0 max 5000" << std::endl;
     std::cout << "option name MultiPV type spin default 1 min 1 max 4" << std::endl;
     std::cout << "option name OwnBook type check default false" << std::endl;
     std::cout << "option name Book File type string default <empty>" << std::endl;
@@ -344,8 +358,12 @@ void UCI::handleGo(const std::string& line) {
     movetime = std::max(0, movetime);
 
     // Calculate time
-    int timeMs = 0;
+    int softTimeMs = 0;
+    int hardTimeMs = 0;
+    int effectiveOverheadMs = moveOverheadMs_;
     int availableTime = 0;
+    bool clockManagedSearch = false;
+    bool moveImmediately = false;
     if (wtime > 0 || btime > 0) {
         availableTime = (board_.sideToMove() == WHITE) ? wtime : btime;
     }
@@ -355,32 +373,45 @@ void UCI::handleGo(const std::string& line) {
     } else if (infinite) {
         search_.setInfinite(true);
     } else if (movetime >= 0 && std::find(tokens.begin(), tokens.end(), "movetime") != tokens.end()) {
-        timeMs = std::max(1, movetime);
+        softTimeMs = std::max(1, movetime);
+        hardTimeMs = softTimeMs;
     } else if (wtime > 0 || btime > 0) {
         int myTime = (board_.sideToMove() == WHITE) ? wtime : btime;
         int myInc = (board_.sideToMove() == WHITE) ? winc : binc;
         if (movestogo <= 0) movestogo = 30;
-        timeMs = myTime / movestogo + myInc;
-        // Safety margin
-        if (timeMs > myTime / 2) timeMs = myTime / 2;
+        clockManagedSearch = true;
+        effectiveOverheadMs = std::max(moveOverheadMs_, MIN_CLOCK_OVERHEAD_MS);
+        if (myTime <= effectiveOverheadMs) {
+            moveImmediately = true;
+        }
+        softTimeMs = myTime / movestogo + myInc;
+        softTimeMs = std::min(softTimeMs, myTime / 2);
+        hardTimeMs = std::max(softTimeMs, std::min(myTime, std::max(softTimeMs * 3, softTimeMs + myInc + 50)));
     } else if (depth > 0 || mate > 0) {
         search_.setInfinite(true);
+        infinite = true;
     } else {
-        timeMs = 3000; // Default
+        softTimeMs = 3000; // Default
+        hardTimeMs = softTimeMs;
     }
 
-    if (nodeLimit == 0 && !infinite && timeMs > 0 && moveOverheadMs_ > 0) {
-        timeMs = std::max(0, timeMs - moveOverheadMs_);
+    if (nodeLimit == 0 && !infinite && !moveImmediately && softTimeMs > 0 && effectiveOverheadMs > 0) {
+        softTimeMs = std::max(0, softTimeMs - effectiveOverheadMs);
+        hardTimeMs = std::max(0, hardTimeMs - effectiveOverheadMs);
     }
-    if (nodeLimit == 0 && !infinite && availableTime > 0) {
-        int hardCap = std::max(0, availableTime - moveOverheadMs_);
-        timeMs = std::min(timeMs, hardCap);
+    if (nodeLimit == 0 && !infinite && !moveImmediately && availableTime > 0) {
+        int hardCap = std::max(0, availableTime - effectiveOverheadMs);
+        if (clockManagedSearch && hardCap <= 0)
+            moveImmediately = true;
+        hardTimeMs = std::min(hardTimeMs, hardCap);
+        softTimeMs = std::min(softTimeMs, hardTimeMs);
     }
-    if (nodeLimit == 0 && !infinite && timeMs <= 0) {
-        timeMs = 1;
+    if (nodeLimit == 0 && !infinite && !moveImmediately && softTimeMs <= 0) {
+        softTimeMs = 1;
     }
-    if (nodeLimit == 0 && !infinite) {
-        search_.setTimeMs(timeMs);
+    if (nodeLimit == 0 && !infinite && !moveImmediately) {
+        hardTimeMs = std::max(softTimeMs, hardTimeMs);
+        search_.setTimeControlMs(softTimeMs, hardTimeMs);
     }
 
     // Probe opening book
@@ -401,6 +432,16 @@ void UCI::handleGo(const std::string& line) {
             std::cout << "bestmove " << moveToString(*bookMove) << std::endl;
             return;
         }
+    }
+
+    if (moveImmediately) {
+        auto move = firstAllowedLegalMove(board_, searchMoves);
+        if (move) {
+            std::cout << "bestmove " << moveToString(*move) << std::endl;
+        } else {
+            std::cout << "bestmove 0000" << std::endl;
+        }
+        return;
     }
 
     if (mate > 0 && depth <= 0)

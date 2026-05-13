@@ -54,7 +54,8 @@
 
 - [x] Replace pseudo-legal plus make/unmake legal generation with check/pin-aware move generation.
 - [x] Add incremental material/PST state, pawn hash, and eval cache.
-- [ ] Improve search tuning: better LMR, reverse futility/razoring, continuation and capture history, depth-preferred TT replacement, and soft/hard time management.
+- [x] Improve search infrastructure with depth-preferred TT replacement and soft/hard time management.
+- [x] Improve search tuning with better LMR, reverse futility/razoring, continuation history, and capture history.
 
 ## Strategic Backlog
 

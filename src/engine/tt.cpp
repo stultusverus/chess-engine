@@ -38,9 +38,16 @@ void TranspositionTable::store(uint64_t hash, int score, int8_t depth, Bound bou
     size_t idx = hash & (entries_.size() - 1);
     TTEntry& entry = entries_[idx];
 
-    // Always replace (unless same position with lower depth)
+    if (entry.hash != 0 && entry.hash != hash && entry.depth > depth)
+        return;
     if (entry.hash == hash && entry.depth > depth && bound != Bound::EXACT)
         return;
+    if (entry.hash != 0 && entry.hash != hash &&
+        entry.depth == depth &&
+        entry.bound == static_cast<uint8_t>(Bound::EXACT) &&
+        bound != Bound::EXACT) {
+        return;
+    }
 
     entry.hash = hash;
     entry.score = score;

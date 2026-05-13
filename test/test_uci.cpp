@@ -258,6 +258,17 @@ void test_uciDoesNotAdvertisePonder() {
     CHECK(contains(output, "uciok"));
 }
 
+void test_lowClockKeepsInternalMoveOverhead() {
+    std::string output = runEngine(
+        "setoption name Move Overhead value 0\n"
+        "position startpos\n"
+        "go wtime 40 btime 40 winc 0 binc 0\n"
+        "quit\n");
+
+    CHECK(contains(output, "bestmove "));
+    CHECK(countOccurrences(output, "info depth") == 0);
+}
+
 void test_multiPvReportsMultipleLines() {
     std::string output = runEngineWithDelayedQuit(
         "position startpos\n"
@@ -333,6 +344,7 @@ int main() {
     RUN_TEST(bookMoveRespectsSearchMoves);
     RUN_TEST(ponderHitReturnsBestMove);
     RUN_TEST(uciDoesNotAdvertisePonder);
+    RUN_TEST(lowClockKeepsInternalMoveOverhead);
     RUN_TEST(multiPvReportsMultipleLines);
     RUN_TEST(matedSideUsesUciMateFormat);
     RUN_TEST(invalidFenDoesNotReplaceCurrentPosition);
