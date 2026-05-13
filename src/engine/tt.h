@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -25,6 +26,15 @@ struct TTEntry {
 
 static_assert(sizeof(TTEntry) == 16, "TTEntry should be 16 bytes");
 
+constexpr int TT_CLUSTER_SIZE = 4;
+
+struct TTCluster {
+    std::array<TTEntry, TT_CLUSTER_SIZE> entries;
+};
+
+static_assert(sizeof(TTCluster) == TT_CLUSTER_SIZE * sizeof(TTEntry),
+              "TTCluster should be tightly packed");
+
 class TranspositionTable {
 public:
     TranspositionTable() = default;
@@ -42,11 +52,11 @@ public:
     static uint16_t packMove(Move m);
     static Move unpackMove(uint16_t packed);
 
-    int size() const { return static_cast<int>(entries_.size()); }
+    int size() const { return static_cast<int>(clusters_.size() * TT_CLUSTER_SIZE); }
     int hashFull() const; // Approximate permille usage
 
 private:
-    std::vector<TTEntry> entries_;
+    std::vector<TTCluster> clusters_;
 };
 
 } // namespace chess

@@ -1,7 +1,29 @@
 #include "tt.h"
-#include <algorithm>
 
 namespace chess {
+namespace {
+
+constexpr int EXACT_BOUND_BONUS = 8;
+
+int replacementPriority(int8_t depth, Bound bound) {
+    return int(depth) * 2 + (bound == Bound::EXACT ? EXACT_BOUND_BONUS : 0);
+}
+
+int replacementPriority(const TTEntry& entry) {
+    Bound bound = static_cast<Bound>(entry.bound);
+    return replacementPriority(entry.depth, bound);
+}
+
+void writeEntry(TTEntry& entry, uint64_t hash, int score, int8_t depth,
+                Bound bound, Move move) {
+    entry.hash = hash;
+    entry.score = score;
+    entry.depth = depth;
+    entry.bound = static_cast<uint8_t>(bound);
+    entry.move = TranspositionTable::packMove(move);
+}
+
+} // namespace
 
 void TranspositionTable::setSize(int mb) {
     if (mb < 1) mb = 1;
@@ -10,61 +32,84 @@ void TranspositionTable::setSize(int mb) {
     size_t bytes = static_cast<size_t>(mb) * 1024 * 1024;
     size_t entryCount = bytes / sizeof(TTEntry);
     if (entryCount < 1024) entryCount = 1024;
+    size_t clusterCount = entryCount / TT_CLUSTER_SIZE;
+    if (clusterCount < 1) clusterCount = 1;
 
     // Round down so the UCI Hash option remains an allocation cap.
     size_t pow2 = 1;
-    while (pow2 <= entryCount / 2) pow2 <<= 1;
-    entries_.resize(pow2);
+    while (pow2 <= clusterCount / 2) pow2 <<= 1;
+    clusters_.resize(pow2);
 
     clear();
 }
 
 void TranspositionTable::clear() {
-    std::fill(entries_.begin(), entries_.end(), TTEntry{0, 0, 0, 0, 0});
+    for (TTCluster& cluster : clusters_)
+        cluster.entries.fill(TTEntry{0, 0, 0, 0, 0});
 }
 
 const TTEntry* TranspositionTable::probe(uint64_t hash) const {
-    if (entries_.empty()) return nullptr;
+    if (clusters_.empty()) return nullptr;
 
-    size_t idx = hash & (entries_.size() - 1);
-    const TTEntry& entry = entries_[idx];
-
-    if (entry.hash == hash)
-        return &entry;
+    size_t idx = hash & (clusters_.size() - 1);
+    const TTCluster& cluster = clusters_[idx];
+    for (const TTEntry& entry : cluster.entries) {
+        if (entry.hash == hash)
+            return &entry;
+    }
     return nullptr;
 }
 
 void TranspositionTable::store(uint64_t hash, int score, int8_t depth, Bound bound, Move move) {
-    if (entries_.empty()) return;
+    if (clusters_.empty()) return;
 
-    size_t idx = hash & (entries_.size() - 1);
-    TTEntry& entry = entries_[idx];
+    size_t idx = hash & (clusters_.size() - 1);
+    TTCluster& cluster = clusters_[idx];
 
-    if (entry.hash != 0 && entry.hash != hash && entry.depth > depth)
-        return;
-    if (entry.hash == hash && entry.depth > depth && bound != Bound::EXACT)
-        return;
-    if (entry.hash != 0 && entry.hash != hash &&
-        entry.depth == depth &&
-        entry.bound == static_cast<uint8_t>(Bound::EXACT) &&
-        bound != Bound::EXACT) {
+    for (TTEntry& entry : cluster.entries) {
+        if (entry.hash != hash)
+            continue;
+        if (entry.depth > depth && bound != Bound::EXACT)
+            return;
+        writeEntry(entry, hash, score, depth, bound, move);
         return;
     }
 
-    entry.hash = hash;
-    entry.score = score;
-    entry.depth = depth;
-    entry.bound = static_cast<uint8_t>(bound);
-    entry.move = packMove(move);
+    for (TTEntry& entry : cluster.entries) {
+        if (entry.hash == 0) {
+            writeEntry(entry, hash, score, depth, bound, move);
+            return;
+        }
+    }
+
+    TTEntry* victim = &cluster.entries[0];
+    for (TTEntry& entry : cluster.entries) {
+        if (replacementPriority(entry) < replacementPriority(*victim))
+            victim = &entry;
+    }
+
+    if (replacementPriority(depth, bound) < replacementPriority(*victim))
+        return;
+
+    writeEntry(*victim, hash, score, depth, bound, move);
 }
 
 int TranspositionTable::hashFull() const {
-    if (entries_.empty()) return 0;
+    if (clusters_.empty()) return 0;
     int used = 0;
-    for (size_t i = 0; i < std::min(entries_.size(), size_t(1000)); i++) {
-        if (entries_[i].hash != 0) used++;
+    int sampled = 0;
+    for (const TTCluster& cluster : clusters_) {
+        for (const TTEntry& entry : cluster.entries) {
+            if (sampled >= 1000)
+                break;
+            if (entry.hash != 0)
+                used++;
+            sampled++;
+        }
+        if (sampled >= 1000)
+            break;
     }
-    return static_cast<int>(used * 1000 / std::min(entries_.size(), size_t(1000)));
+    return sampled == 0 ? 0 : static_cast<int>(used * 1000 / sampled);
 }
 
 uint16_t TranspositionTable::packMove(Move m) {

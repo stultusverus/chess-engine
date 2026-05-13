@@ -12,7 +12,7 @@ src/engine/               # Chess engine core
 ├── movegen.h/cpp         #   Check/pin-aware legal move generation (perft-verified)
 ├── eval.h/cpp            #   Tapered PeSTO eval + pawn/eval caches, mobility, king safety
 ├── search.h/cpp          #   Alpha-beta PVS + iterative deepening + LMR + null move pruning
-├── tt.h/cpp              #   Depth-preferred transposition table (16B entries)
+├── tt.h/cpp              #   4-way clustered depth-preferred transposition table (16B entries)
 ├── book.h/cpp            #   Polyglot opening book loader (.bin format, weighted random)
 ├── uci.h/cpp             #   UCI protocol handler (WDL support, time management)
 └── poly_keys.h           #   Polyglot Zobrist key constants (header-only)

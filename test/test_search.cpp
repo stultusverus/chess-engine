@@ -68,25 +68,38 @@ void test_ttDepthPreferredReplacement() {
     tt.setSize(1);
 
     uint64_t deepHash = 0x1234000000000001ULL;
-    uint64_t shallowHash = 0x5678000000000001ULL;
+    uint64_t shallowExactHash = 0x5678000000000001ULL;
+    uint64_t mediumHash = 0x9ABC000000000001ULL;
+    uint64_t otherHash = 0xDEF0000000000001ULL;
+    uint64_t replacementHash = 0x2468000000000001ULL;
     chess::Move deepMove(chess::D1, chess::D8);
     chess::Move shallowMove(chess::A2, chess::A3);
+    chess::Move mediumMove(chess::C2, chess::C4);
+    chess::Move otherMove(chess::G1, chess::F3);
     chess::Move newerMove(chess::B2, chess::B4);
 
     tt.store(deepHash, 100, 8, chess::Bound::LOWER, deepMove);
-    tt.store(shallowHash, 20, 2, chess::Bound::EXACT, shallowMove);
+    tt.store(shallowExactHash, 20, 2, chess::Bound::EXACT, shallowMove);
+    tt.store(mediumHash, 40, 4, chess::Bound::LOWER, mediumMove);
+    tt.store(otherHash, 60, 6, chess::Bound::LOWER, otherMove);
 
     const chess::TTEntry* deepEntry = tt.probe(deepHash);
     CHECK(deepEntry != nullptr);
     CHECK(deepEntry->depth == 8);
     CHECK(chess::TranspositionTable::unpackMove(deepEntry->move).from == chess::D1);
+    CHECK(tt.probe(shallowExactHash) != nullptr);
+    CHECK(tt.probe(mediumHash) != nullptr);
+    CHECK(tt.probe(otherHash) != nullptr);
 
-    tt.store(shallowHash, 30, 10, chess::Bound::EXACT, newerMove);
+    tt.store(replacementHash, 30, 5, chess::Bound::EXACT, newerMove);
 
-    CHECK(tt.probe(deepHash) == nullptr);
-    const chess::TTEntry* replacement = tt.probe(shallowHash);
+    CHECK(tt.probe(deepHash) != nullptr);
+    CHECK(tt.probe(shallowExactHash) != nullptr);
+    CHECK(tt.probe(mediumHash) == nullptr);
+    CHECK(tt.probe(otherHash) != nullptr);
+    const chess::TTEntry* replacement = tt.probe(replacementHash);
     CHECK(replacement != nullptr);
-    CHECK(replacement->depth == 10);
+    CHECK(replacement->depth == 5);
     CHECK(chess::TranspositionTable::unpackMove(replacement->move).from == chess::B2);
 }
 

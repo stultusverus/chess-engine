@@ -69,6 +69,8 @@
 - [x] Add optional slow perft assertions behind `CHESS_ENGINE_SLOW_TESTS`.
 - [x] Add deterministic make/unmake invariant tests comparing FEN, hash, pawn hash, eval state, and generated move legality.
 - [x] Add fixed-seed pseudo-random make/unmake invariant tests for broader generated-position coverage.
+- [x] Upgrade TT replacement to 4-way clustered buckets with depth/exact-preferred replacement.
+- [ ] Add TT generation/age.
 
 ## Strategic Backlog
 
