@@ -63,6 +63,33 @@ void test_ttStoresMateScaleScore() {
     CHECK(chess::TranspositionTable::unpackMove(entry->move).to == chess::D8);
 }
 
+void test_ttDepthPreferredReplacement() {
+    chess::TranspositionTable tt;
+    tt.setSize(1);
+
+    uint64_t deepHash = 0x1234000000000001ULL;
+    uint64_t shallowHash = 0x5678000000000001ULL;
+    chess::Move deepMove(chess::D1, chess::D8);
+    chess::Move shallowMove(chess::A2, chess::A3);
+    chess::Move newerMove(chess::B2, chess::B4);
+
+    tt.store(deepHash, 100, 8, chess::Bound::LOWER, deepMove);
+    tt.store(shallowHash, 20, 2, chess::Bound::EXACT, shallowMove);
+
+    const chess::TTEntry* deepEntry = tt.probe(deepHash);
+    CHECK(deepEntry != nullptr);
+    CHECK(deepEntry->depth == 8);
+    CHECK(chess::TranspositionTable::unpackMove(deepEntry->move).from == chess::D1);
+
+    tt.store(shallowHash, 30, 10, chess::Bound::EXACT, newerMove);
+
+    CHECK(tt.probe(deepHash) == nullptr);
+    const chess::TTEntry* replacement = tt.probe(shallowHash);
+    CHECK(replacement != nullptr);
+    CHECK(replacement->depth == 10);
+    CHECK(chess::TranspositionTable::unpackMove(replacement->move).from == chess::B2);
+}
+
 // Back-rank mate in 1: Rd1-d8#
 void test_mateInOneAtDepth1() {
     chess::Search search;
@@ -287,6 +314,7 @@ int main() {
     RUN_TEST(searchDepth1_fromStartpos);
     RUN_TEST(ttMovePackingPromotion);
     RUN_TEST(ttStoresMateScaleScore);
+    RUN_TEST(ttDepthPreferredReplacement);
     RUN_TEST(mateInOneAtDepth1);
     RUN_TEST(mateInOne);
     RUN_TEST(captureHangingQueen);
