@@ -98,6 +98,21 @@ static std::string scoreField(const std::string& infoLine) {
     return infoLine.substr(pos, end - pos);
 }
 
+static int timeFieldMs(const std::string& infoLine) {
+    std::string::size_type pos = infoLine.find(" time ");
+    if (pos == std::string::npos) return -1;
+    pos += 6;
+
+    int value = 0;
+    bool foundDigit = false;
+    while (pos < infoLine.size() && infoLine[pos] >= '0' && infoLine[pos] <= '9') {
+        foundDigit = true;
+        value = value * 10 + (infoLine[pos] - '0');
+        pos++;
+    }
+    return foundDigit ? value : -1;
+}
+
 static std::string firstPvMoveForMultiPv(const std::string& output, int multiPv) {
     std::string marker = " multipv " + std::to_string(multiPv) + " ";
     std::string::size_type pos = output.find(marker);
@@ -269,6 +284,18 @@ void test_lowClockKeepsInternalMoveOverhead() {
     CHECK(countOccurrences(output, "info depth") == 0);
 }
 
+void test_movetimeIgnoresMoveOverhead() {
+    std::string output = runEngineWithDelayedQuit(
+        "setoption name Move Overhead value 5000\n"
+        "position fen r3k2r/p1ppqpb1/bn2pnp1/2pPN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1\n"
+        "go movetime 80\n",
+        "0.2");
+
+    CHECK(contains(output, "bestmove "));
+    CHECK(countOccurrences(output, "info depth") > 1);
+    CHECK(timeFieldMs(lastInfoLine(output)) >= 5);
+}
+
 void test_multiPvReportsMultipleLines() {
     std::string output = runEngineWithDelayedQuit(
         "position startpos\n"
@@ -345,6 +372,7 @@ int main() {
     RUN_TEST(ponderHitReturnsBestMove);
     RUN_TEST(uciDoesNotAdvertisePonder);
     RUN_TEST(lowClockKeepsInternalMoveOverhead);
+    RUN_TEST(movetimeIgnoresMoveOverhead);
     RUN_TEST(multiPvReportsMultipleLines);
     RUN_TEST(matedSideUsesUciMateFormat);
     RUN_TEST(invalidFenDoesNotReplaceCurrentPosition);

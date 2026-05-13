@@ -360,7 +360,7 @@ void UCI::handleGo(const std::string& line) {
     // Calculate time
     int softTimeMs = 0;
     int hardTimeMs = 0;
-    int effectiveOverheadMs = moveOverheadMs_;
+    int effectiveOverheadMs = 0;
     int availableTime = 0;
     bool clockManagedSearch = false;
     bool moveImmediately = false;
@@ -395,7 +395,8 @@ void UCI::handleGo(const std::string& line) {
         hardTimeMs = softTimeMs;
     }
 
-    if (nodeLimit == 0 && !infinite && !moveImmediately && softTimeMs > 0 && effectiveOverheadMs > 0) {
+    if (clockManagedSearch && nodeLimit == 0 && !infinite && !moveImmediately &&
+        softTimeMs > 0 && effectiveOverheadMs > 0) {
         softTimeMs = std::max(0, softTimeMs - effectiveOverheadMs);
         hardTimeMs = std::max(0, hardTimeMs - effectiveOverheadMs);
     }
