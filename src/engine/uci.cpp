@@ -182,6 +182,7 @@ void UCI::handleUci() {
     std::cout << "option name MultiPV type spin default 1 min 1 max 4" << std::endl;
     std::cout << "option name OwnBook type check default false" << std::endl;
     std::cout << "option name Book File type string default <empty>" << std::endl;
+    std::cout << "option name Book Max Ply type spin default 10 min 0 max 200" << std::endl;
     std::cout << "option name UCI_ShowWDL type check default false" << std::endl;
     std::cout << "uciok" << std::endl;
 }
@@ -603,6 +604,10 @@ void UCI::handleSetOption(const std::string& line) {
     } else if (name == "Book File") {
         if (!value.empty() && value != "<empty>")
             book_.load(value);
+    } else if (name == "Book Max Ply") {
+        if (auto ply = parseInt(value)) {
+            book_.setMaxPly(std::clamp(*ply, 0, 200));
+        }
     } else if (name == "UCI_ShowWDL") {
         if (auto enabled = parseBool(value)) {
             showWdl_ = *enabled;

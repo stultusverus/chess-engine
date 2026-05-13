@@ -256,6 +256,19 @@ void test_bookMoveRespectsSearchMoves() {
     CHECK(contains(output, "bestmove a2a3"));
 }
 
+void test_bookMaxPlyZeroDisablesBook() {
+    std::string output = runEngineWithDelayedQuit(
+        "setoption name OwnBook value true\n"
+        "setoption name Book File value ../books/gm2001.bin\n"
+        "setoption name Book Max Ply value 0\n"
+        "position startpos\n"
+        "go depth 1\n",
+        "0.2");
+
+    CHECK(!contains(output, "info string book move"));
+    CHECK(contains(output, "bestmove "));
+}
+
 void test_goPonderIsRejected() {
     std::string output = runEngineWithDelayedInput(
         "position startpos\n"
@@ -271,6 +284,7 @@ void test_uciDoesNotAdvertisePonder() {
     std::string output = runEngine("uci\nquit\n");
     CHECK(contains(output, "id name ChessEngine "));
     CHECK(!contains(output, "option name Ponder"));
+    CHECK(contains(output, "option name Book Max Ply"));
     CHECK(contains(output, "uciok"));
 }
 
@@ -370,6 +384,7 @@ int main() {
     RUN_TEST(goSearchMovesRestrictsRootMove);
     RUN_TEST(searchMovesRestrictionSurvivesPreviousTTHit);
     RUN_TEST(bookMoveRespectsSearchMoves);
+    RUN_TEST(bookMaxPlyZeroDisablesBook);
     RUN_TEST(goPonderIsRejected);
     RUN_TEST(uciDoesNotAdvertisePonder);
     RUN_TEST(lowClockKeepsInternalMoveOverhead);

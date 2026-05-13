@@ -52,6 +52,7 @@ The engine supports Polyglot (.bin) opening books. Use UCI setoption:
 ```
 setoption name OwnBook value true
 setoption name Book File value books/gm2001.bin
+setoption name Book Max Ply value 10
 ```
 
 ### Getting a Book

@@ -54,6 +54,7 @@
 - [x] Give serial `MultiPV` searches a shared time origin for time-managed searches.
 - [x] Restrict broad internal iterative deepening to deeper PV nodes.
 - [x] Reject unsupported `go ponder` with an `info string` diagnostic and `bestmove 0000`.
+- [x] Add UCI `Book Max Ply` to configure the opening-book cutoff.
 
 ## Performance Backlog
 
