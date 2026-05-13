@@ -3,6 +3,7 @@
 #include "engine/movegen.h"
 #include "engine/types.h"
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -420,6 +421,32 @@ void test_makeUnmakeInvariantsAcrossGeneratedMoves() {
     }
 }
 
+void test_makeUnmakeInvariantsAcrossPseudoRandomPositions() {
+    std::vector<std::string> roots = {
+        chess::STARTPOS_FEN,
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+    };
+
+    chess::MoveGenerator gen;
+    std::mt19937_64 rng(0xC0FFEEULL);
+
+    for (const std::string& root : roots) {
+        chess::Board b(root);
+        for (int ply = 0; ply < 48; ply++) {
+            walkMakeUnmakeInvariants(b, gen, 1);
+
+            chess::MoveList moves;
+            gen.generateLegalMoves(b, moves);
+            if (moves.size() == 0)
+                break;
+
+            const chess::Move& selected = moves[static_cast<int>(rng() % moves.size())];
+            chess::UndoInfo undo;
+            CHECK(b.makeMove(selected, undo));
+        }
+    }
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -455,6 +482,7 @@ int main() {
     RUN_TEST(invalidPromotionsRejected);
     RUN_TEST(malformedFenHandledSafely);
     RUN_TEST(makeUnmakeInvariantsAcrossGeneratedMoves);
+    RUN_TEST(makeUnmakeInvariantsAcrossPseudoRandomPositions);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

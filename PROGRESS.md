@@ -68,7 +68,7 @@
 - [ ] Add machine-readable speed and tactical benchmark modes around fixed positions and EPD suites.
 - [x] Add optional slow perft assertions behind `CHESS_ENGINE_SLOW_TESTS`.
 - [x] Add deterministic make/unmake invariant tests comparing FEN, hash, pawn hash, eval state, and generated move legality.
-- [ ] Add randomized make/unmake invariant tests for broader generated-position coverage.
+- [x] Add fixed-seed pseudo-random make/unmake invariant tests for broader generated-position coverage.
 
 ## Strategic Backlog
 
