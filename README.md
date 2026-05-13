@@ -8,11 +8,11 @@ A C++ chess engine built from scratch with UCI protocol support.
 src/engine/               # Chess engine core
 ├── types.h/cpp           #   Square, Piece, Color, Move, Bitboard, helpers
 ├── attacks.h/cpp         #   Magic bitboard attack tables (all piece types)
-├── board.h/cpp           #   Bitboard board, FEN, make/unmake, Zobrist hash
-├── movegen.h/cpp         #   Legal move generation (perft-verified)
-├── eval.h/cpp            #   Tapered PeSTO eval + pawn structure, mobility, bishop pair
+├── board.h/cpp           #   Bitboard board, FEN, make/unmake, Zobrist hash, incremental eval state
+├── movegen.h/cpp         #   Check/pin-aware legal move generation (perft-verified)
+├── eval.h/cpp            #   Tapered PeSTO eval + pawn/eval caches, mobility, king safety
 ├── search.h/cpp          #   Alpha-beta PVS + iterative deepening + LMR + null move pruning
-├── tt.h/cpp              #   Transposition table (always-replace, 16B entries)
+├── tt.h/cpp              #   Depth-preferred transposition table (16B entries)
 ├── book.h/cpp            #   Polyglot opening book loader (.bin format, weighted random)
 ├── uci.h/cpp             #   UCI protocol handler (WDL support, time management)
 └── poly_keys.h           #   Polyglot Zobrist key constants (header-only)
@@ -82,11 +82,21 @@ Recently fixed review items:
 - En-passant FEN and hashing are normalized so non-capturable EP targets can round-trip without splitting TT/repetition keys.
 - `Ponder` is not advertised until true ponder continuation is implemented.
 - Quiescence search uses dedicated noisy-move generation for legal captures, en-passant captures, and promotions outside check.
+- Legal move generation is check/pin-aware, and board make/unmake maintains incremental material/PST state, pawn hash, and eval-cache inputs.
+
+Current correctness and robustness work:
+
+- Fix null-move en-passant hash removal when an EP capture is available before the null move.
+- Make the UCI `Hash` option a memory cap instead of rounding some values up to almost 2x the requested size.
+- Give serial `MultiPV` searches a shared time budget, or replace them with true single-search MultiPV.
+- Clarify unsupported `go ponder` behavior until real ponder continuation is implemented.
 
 High-value strength/performance work:
 
-- Check/pin-aware legal move generation.
-- Incremental eval, pawn hash, and eval cache.
+- Staged move picker with lazy SEE for captures.
+- Clustered/generation-aware TT replacement and optional static-eval storage.
+- Automated classical eval tuning with Texel/SPSA.
+- Fixed-node/depth tactical EPD and speed benchmark suites.
 - Optional Syzygy probing, NNUE experiments, and eventually SMP/`Threads`.
 
 ## SPRT
