@@ -1,7 +1,10 @@
 #include "engine/board.h"
 #include "engine/attacks.h"
+#include "engine/movegen.h"
 #include "engine/types.h"
 #include <iostream>
+#include <string>
+#include <vector>
 
 static int failures = 0;
 #define CHECK(expr) do { if (!(expr)) { std::cerr << "FAIL: " << #expr << std::endl; failures++; } } while(0)
@@ -366,6 +369,57 @@ void test_malformedFenHandledSafely() {
     CHECK(badPlacement.fen() == chess::STARTPOS_FEN);
 }
 
+static bool evalStateEquals(const chess::IncrementalEvalState& a,
+                            const chess::IncrementalEvalState& b) {
+    return a.material == b.material &&
+           a.pstMg == b.pstMg &&
+           a.pstEg == b.pstEg &&
+           a.phase == b.phase &&
+           a.pawnHash == b.pawnHash;
+}
+
+static void walkMakeUnmakeInvariants(chess::Board& b, chess::MoveGenerator& gen, int depth) {
+    std::string startFen = b.fen();
+    uint64_t startHash = b.hash();
+    uint64_t startPawnHash = b.pawnHash();
+    chess::IncrementalEvalState startEval = b.evalState();
+
+    chess::MoveList moves;
+    gen.generateLegalMoves(b, moves);
+    for (const chess::Move& m : moves)
+        CHECK(b.isMoveLegal(m));
+
+    if (depth == 0)
+        return;
+
+    for (const chess::Move& m : moves) {
+        chess::UndoInfo undo;
+        CHECK(b.makeMove(m, undo));
+        walkMakeUnmakeInvariants(b, gen, depth - 1);
+        b.unmakeMove(m, undo);
+
+        CHECK(b.fen() == startFen);
+        CHECK(b.hash() == startHash);
+        CHECK(b.pawnHash() == startPawnHash);
+        CHECK(evalStateEquals(b.evalState(), startEval));
+    }
+}
+
+void test_makeUnmakeInvariantsAcrossGeneratedMoves() {
+    std::vector<std::string> fens = {
+        chess::STARTPOS_FEN,
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1",
+        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"
+    };
+
+    chess::MoveGenerator gen;
+    for (const std::string& fen : fens) {
+        chess::Board b(fen);
+        walkMakeUnmakeInvariants(b, gen, 2);
+    }
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -400,6 +454,7 @@ int main() {
     RUN_TEST(promotion);
     RUN_TEST(invalidPromotionsRejected);
     RUN_TEST(malformedFenHandledSafely);
+    RUN_TEST(makeUnmakeInvariantsAcrossGeneratedMoves);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

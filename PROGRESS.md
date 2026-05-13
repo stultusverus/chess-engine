@@ -66,8 +66,9 @@
 - [ ] Upgrade TT replacement with 2-way/4-way clustered buckets and generation/age.
 - [ ] Store static evaluation in TT entries if it improves pruning/eval reuse.
 - [ ] Add machine-readable speed and tactical benchmark modes around fixed positions and EPD suites.
-- [ ] Add optional slow perft assertions behind an environment flag.
-- [ ] Add randomized make/unmake invariant tests comparing FEN, hash, pawn hash, eval state, and legal-move consistency.
+- [x] Add optional slow perft assertions behind `CHESS_ENGINE_SLOW_TESTS`.
+- [x] Add deterministic make/unmake invariant tests comparing FEN, hash, pawn hash, eval state, and generated move legality.
+- [ ] Add randomized make/unmake invariant tests for broader generated-position coverage.
 
 ## Strategic Backlog
 
