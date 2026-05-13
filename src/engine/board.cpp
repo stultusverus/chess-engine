@@ -710,15 +710,14 @@ void Board::makeNullMove(NullUndo& undo) {
     undo.oldHalfMoves = halfMoves_;
     undo.oldHash = hash_;
 
+    Color us = stm_;
+    if (ep_ != SQ_NONE && hasEnPassantCapture(mailbox_, us, ep_))
+        hash_ ^= zobristEp_[fileOf(ep_)];
+
     hash_ ^= zobristSide_;
     stm_ = ~stm_;
 
-    if (ep_ != SQ_NONE && hasEnPassantCapture(mailbox_, stm_, ep_)) {
-        hash_ ^= zobristEp_[fileOf(ep_)];
-    }
-    if (ep_ != SQ_NONE) {
-        ep_ = SQ_NONE;
-    }
+    ep_ = SQ_NONE;
 
     halfMoves_++;
 }

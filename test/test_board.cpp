@@ -1,7 +1,11 @@
 #include "engine/board.h"
 #include "engine/attacks.h"
+#include "engine/movegen.h"
 #include "engine/types.h"
 #include <iostream>
+#include <random>
+#include <string>
+#include <vector>
 
 static int failures = 0;
 #define CHECK(expr) do { if (!(expr)) { std::cerr << "FAIL: " << #expr << std::endl; failures++; } } while(0)
@@ -304,6 +308,23 @@ void test_enPassantFenAllowsUncapturableTargetWithoutHashingIt() {
     CHECK(withEp.hash() == withoutEp.hash());
 }
 
+void test_nullMoveClearsCapturableEpHash() {
+    chess::Board b("4k3/8/8/8/3pP3/8/8/4K3 b - e3 0 1");
+    chess::Board expectedNull("4k3/8/8/8/3pP3/8/8/4K3 w - - 1 1");
+    uint64_t startHash = b.hash();
+    chess::NullUndo undo;
+
+    b.makeNullMove(undo);
+    CHECK(b.enPassant() == chess::SQ_NONE);
+    CHECK(b.sideToMove() == chess::WHITE);
+    CHECK(b.hash() == expectedNull.hash());
+
+    b.unmakeNullMove(undo);
+    CHECK(b.hash() == startHash);
+    CHECK(b.enPassant() == chess::E3);
+    CHECK(b.sideToMove() == chess::BLACK);
+}
+
 void test_promotion() {
     std::string fen = "8/P7/8/8/8/8/8/k6K w - - 0 1";
     chess::Board b(fen);
@@ -349,6 +370,83 @@ void test_malformedFenHandledSafely() {
     CHECK(badPlacement.fen() == chess::STARTPOS_FEN);
 }
 
+static bool evalStateEquals(const chess::IncrementalEvalState& a,
+                            const chess::IncrementalEvalState& b) {
+    return a.material == b.material &&
+           a.pstMg == b.pstMg &&
+           a.pstEg == b.pstEg &&
+           a.phase == b.phase &&
+           a.pawnHash == b.pawnHash;
+}
+
+static void walkMakeUnmakeInvariants(chess::Board& b, chess::MoveGenerator& gen, int depth) {
+    std::string startFen = b.fen();
+    uint64_t startHash = b.hash();
+    uint64_t startPawnHash = b.pawnHash();
+    chess::IncrementalEvalState startEval = b.evalState();
+
+    chess::MoveList moves;
+    gen.generateLegalMoves(b, moves);
+    for (const chess::Move& m : moves)
+        CHECK(b.isMoveLegal(m));
+
+    if (depth == 0)
+        return;
+
+    for (const chess::Move& m : moves) {
+        chess::UndoInfo undo;
+        CHECK(b.makeMove(m, undo));
+        walkMakeUnmakeInvariants(b, gen, depth - 1);
+        b.unmakeMove(m, undo);
+
+        CHECK(b.fen() == startFen);
+        CHECK(b.hash() == startHash);
+        CHECK(b.pawnHash() == startPawnHash);
+        CHECK(evalStateEquals(b.evalState(), startEval));
+    }
+}
+
+void test_makeUnmakeInvariantsAcrossGeneratedMoves() {
+    std::vector<std::string> fens = {
+        chess::STARTPOS_FEN,
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1",
+        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"
+    };
+
+    chess::MoveGenerator gen;
+    for (const std::string& fen : fens) {
+        chess::Board b(fen);
+        walkMakeUnmakeInvariants(b, gen, 2);
+    }
+}
+
+void test_makeUnmakeInvariantsAcrossPseudoRandomPositions() {
+    std::vector<std::string> roots = {
+        chess::STARTPOS_FEN,
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+    };
+
+    chess::MoveGenerator gen;
+    std::mt19937_64 rng(0xC0FFEEULL);
+
+    for (const std::string& root : roots) {
+        chess::Board b(root);
+        for (int ply = 0; ply < 48; ply++) {
+            walkMakeUnmakeInvariants(b, gen, 1);
+
+            chess::MoveList moves;
+            gen.generateLegalMoves(b, moves);
+            if (moves.size() == 0)
+                break;
+
+            const chess::Move& selected = moves[static_cast<int>(rng() % moves.size())];
+            chess::UndoInfo undo;
+            CHECK(b.makeMove(selected, undo));
+        }
+    }
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -379,9 +477,12 @@ int main() {
     RUN_TEST(invalidFenFieldsRejected);
     RUN_TEST(validEnPassantFenRequiresCapturablePawn);
     RUN_TEST(enPassantFenAllowsUncapturableTargetWithoutHashingIt);
+    RUN_TEST(nullMoveClearsCapturableEpHash);
     RUN_TEST(promotion);
     RUN_TEST(invalidPromotionsRejected);
     RUN_TEST(malformedFenHandledSafely);
+    RUN_TEST(makeUnmakeInvariantsAcrossGeneratedMoves);
+    RUN_TEST(makeUnmakeInvariantsAcrossPseudoRandomPositions);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

@@ -12,13 +12,23 @@ make -j$(sysctl -n hw.ncpu)  # Linux: use $(nproc)
 
 Produces two executables:
 - `chess-engine` — UCI engine (stdin/stdout protocol)
-- `bench_engine` — local perft/search/tactical benchmark runner
+- `bench_engine` — local perft/search/tactical benchmark runner; pass `--json` for machine-readable output
 
 ## Test
 
 ```bash
 cd build && ctest --output-on-failure
 ```
+
+When changing UCI/search timing, async subprocess tests, or anything that affects emitted `info` lines, rebuild the relevant executable and run the UCI test more than once before committing:
+
+```bash
+cd build
+cmake --build . --target chess-engine test_uci
+ctest --output-on-failure -R uci --repeat-until-fail 3
+```
+
+Avoid brittle UCI tests that depend on exact asynchronous `info depth` line counts or the last info line when a search can finish before `quit`/`stop` is delivered. Prefer asserting the specific required token appears with enough delay for CI runners.
 
 ## Lint
 
@@ -60,11 +70,20 @@ The latest correctness review fixes are now part of the codebase and should rema
 - En-passant FEN/hash handling accepts syntactically valid EP targets while hashing EP only when an EP capture is possible.
 - `Ponder` is no longer advertised until true ponder continuation is implemented.
 - Quiescence search uses a dedicated noisy-move generator outside check instead of generating all legal moves and filtering.
+- Legal move generation is check/pin-aware.
+- Board make/unmake maintains incremental material/PST state, pawn hash, and eval-cache inputs.
+- Null-move en-passant hash removal uses the old side to move before toggling side.
+- UCI `Hash` sizing is treated as an upper bound by rounding TT entries down to a power of two.
+- Serial `MultiPV` searches use a shared time origin for time-managed searches.
+- Internal iterative deepening is restricted to deeper PV nodes.
+- Unsupported `go ponder` returns `bestmove 0000` with an `info string` diagnostic.
+- Transposition table storage uses 4-way clustered buckets with depth/exact/generation-aware replacement and static eval storage.
+- Search move ordering uses a staged picker: TT move, good captures/promotions, killers/countermoves, quiet history, then bad captures.
 
 Current high-value performance work:
 
-- Improve legal move generation with check/pin-aware generation.
-- Add incremental eval pieces such as material/PST state, pawn hash, and evaluation cache.
+- Add automated eval tuning before expanding hand-tuned classical terms.
+- Extend benchmark coverage with fixed-node/depth tactical EPD and speed suites.
 
 ## Opening Book
 
@@ -73,6 +92,8 @@ The engine supports Polyglot (.bin) opening books. Use UCI setoption:
 ```
 setoption name OwnBook value true
 setoption name Book File value books/gm2001.bin
+setoption name Book Max Ply value 10
+setoption name Book Random value true
 ```
 
 ## SPRT Regression Testing

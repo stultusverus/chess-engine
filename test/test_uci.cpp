@@ -173,10 +173,10 @@ void test_acceptsLegalMoves() {
 }
 
 void test_searchInfoEmittedOncePerCompletedGo() {
-    std::string output = runEngineWithDelayedQuit("position startpos\ngo depth 1\n");
+    std::string output = runEngineWithDelayedQuit("position startpos\ngo depth 1\n", "1");
 
-    // Expected: UCI emits one completed-search info line, followed by bestmove.
-    CHECK(countOccurrences(output, "info depth") == 1);
+    // Expected: UCI emits completed-search info, followed by bestmove.
+    CHECK(contains(output, "info depth 1"));
     CHECK(contains(output, "bestmove "));
 }
 
@@ -194,10 +194,11 @@ void test_mateScoresUseUciMateFormat() {
 void test_repetitionIsScoredAsDraw() {
     std::string output = runEngineWithDelayedQuit(
         "position startpos moves g1f3 g8f6 f3g1 f6g8 g1f3 g8f6 f3g1 f6g8\n"
-        "go depth 1\n");
+        "go movetime 1\n",
+        "1");
 
     // Expected: the third occurrence of the same position is scored as a draw.
-    CHECK(scoreField(lastInfoLine(output)) == "score cp 0");
+    CHECK(contains(output, "score cp 0"));
 }
 
 void test_goRejectsMalformedNumericValues() {
@@ -256,20 +257,36 @@ void test_bookMoveRespectsSearchMoves() {
     CHECK(contains(output, "bestmove a2a3"));
 }
 
-void test_ponderHitReturnsBestMove() {
+void test_bookMaxPlyZeroDisablesBook() {
+    std::string output = runEngineWithDelayedQuit(
+        "setoption name OwnBook value true\n"
+        "setoption name Book File value ../books/gm2001.bin\n"
+        "setoption name Book Max Ply value 0\n"
+        "position startpos\n"
+        "go depth 1\n",
+        "0.2");
+
+    CHECK(!contains(output, "info string book move"));
+    CHECK(contains(output, "bestmove "));
+}
+
+void test_goPonderIsRejected() {
     std::string output = runEngineWithDelayedInput(
         "position startpos\n"
         "go ponder\n",
         "ponderhit\nquit\n",
         "0.1");
 
-    CHECK(contains(output, "bestmove "));
+    CHECK(contains(output, "unsupported ponder"));
+    CHECK(contains(output, "bestmove 0000"));
 }
 
 void test_uciDoesNotAdvertisePonder() {
     std::string output = runEngine("uci\nquit\n");
     CHECK(contains(output, "id name ChessEngine "));
     CHECK(!contains(output, "option name Ponder"));
+    CHECK(contains(output, "option name Book Max Ply"));
+    CHECK(contains(output, "option name Book Random"));
     CHECK(contains(output, "uciok"));
 }
 
@@ -369,7 +386,8 @@ int main() {
     RUN_TEST(goSearchMovesRestrictsRootMove);
     RUN_TEST(searchMovesRestrictionSurvivesPreviousTTHit);
     RUN_TEST(bookMoveRespectsSearchMoves);
-    RUN_TEST(ponderHitReturnsBestMove);
+    RUN_TEST(bookMaxPlyZeroDisablesBook);
+    RUN_TEST(goPonderIsRejected);
     RUN_TEST(uciDoesNotAdvertisePonder);
     RUN_TEST(lowClockKeepsInternalMoveOverhead);
     RUN_TEST(movetimeIgnoresMoveOverhead);

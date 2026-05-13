@@ -187,6 +187,39 @@ void test_weightedRandomProducesValidMoves() {
     }
 }
 
+void test_deterministicBookChoosesHighestWeight() {
+    const char* path = "test_weighted_book.bin";
+    chess::Board b;
+    {
+        std::ofstream out(path, std::ios::binary);
+        uint64_t key = chess::Book::polyglotHash(b);
+
+        uint16_t lowWeightMove = static_cast<uint16_t>((chess::A2 << 6) | chess::A3);
+        writeBE64(out, key);
+        writeBE16(out, lowWeightMove);
+        writeBE16(out, 1);
+        writeBE32(out, 0);
+
+        uint16_t highWeightMove = static_cast<uint16_t>((chess::H2 << 6) | chess::H4);
+        writeBE64(out, key);
+        writeBE16(out, highWeightMove);
+        writeBE16(out, 100);
+        writeBE32(out, 0);
+    }
+
+    chess::Book book;
+    CHECK(book.load(path));
+    book.setRandom(false);
+    auto m = book.probe(b);
+    CHECK(m.has_value());
+    if (m) {
+        CHECK(m->from == chess::H2);
+        CHECK(m->to == chess::H4);
+    }
+
+    std::remove(path);
+}
+
 int main() {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -207,6 +240,7 @@ int main() {
     RUN_TEST(probeEmptyBook);
     RUN_TEST(maxPlyCapped);
     RUN_TEST(weightedRandomProducesValidMoves);
+    RUN_TEST(deterministicBookChoosesHighestWeight);
 
     std::cout << (failures ? "SOME TESTS FAILED" : "All book tests passed") << std::endl;
     return failures ? 1 : 0;

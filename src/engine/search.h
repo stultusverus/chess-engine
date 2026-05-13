@@ -35,6 +35,8 @@ public:
     void setTimeControlMs(int softMs, int hardMs);
     void setInfinite(bool inf);
     void setNodeLimit(uint64_t nodes);
+    void setTimeStartOverride(std::chrono::steady_clock::time_point startTime);
+    void clearTimeStartOverride();
     void setRootMoves(const std::vector<Move>& moves);
     void clearRootMoves();
     void setInfoCallback(std::function<void(const SearchResult&)> callback);
@@ -49,8 +51,11 @@ private:
     int alphaBeta(Board& board, int depth, int alpha, int beta, int ply);
     int quiesce(Board& board, int alpha, int beta, int ply);
 
-    int scoreMove(const Board& board, Move m, int ply) const;
-    void sortMoves(MoveList& moves, const Board& board, int ply);
+    int noisyMovePreScore(const Board& board, Move m) const;
+    int noisyMoveScore(const Board& board, Move m, int see) const;
+    int quietMoveScore(const Board& board, Move m, int ply) const;
+    bool isKillerMove(Move m, int ply) const;
+    bool isCounterMove(Move m, int ply) const;
     bool rootMoveAllowed(Move m) const;
     std::vector<Move> extractPv(Board board, Move bestMove, int maxDepth) const;
     int elapsedMs() const;
@@ -58,6 +63,7 @@ private:
 
     void ageHistory();
     void updateKiller(Move m, int ply);
+    void updateCounterMove(Move m, int ply);
     void updateQuietHistory(Move m, Piece movedPiece, int depth, int ply, int sign);
     void updateCaptureHistory(Move m, Piece movedPiece, PieceType capturedType, int depth, int sign);
     void updateHistoryValue(int& value, int bonus);
@@ -72,22 +78,25 @@ private:
     bool infinite_ = false;
     std::atomic<bool> stop_{false};
     std::chrono::steady_clock::time_point startTime_{};
+    std::chrono::steady_clock::time_point startTimeOverride_{};
+    bool useStartTimeOverride_ = false;
     uint64_t nodes_ = 0;
     uint64_t nodesLimit_ = 0;
     uint64_t maxNodes_ = 0;
 
     // Move ordering
     static constexpr int KILLER_SCORE = 50000;
+    static constexpr int COUNTER_MOVE_SCORE = 49900;
     static constexpr int HISTORY_MAX = 16384;
     int killer1_[MAX_PLY]{};
     int killer2_[MAX_PLY]{};
     int quietHistory_[COLOR_NB][64][64]{};
     int continuationHistory_[PIECE_NB][64][PIECE_NB][64]{};
     int captureHistory_[PIECE_NB][64][PIECE_TYPE_NB]{};
+    Move counterMove_[PIECE_NB][64]{};
     Piece continuationPieceByPly_[MAX_PLY]{};
     Square continuationToByPly_[MAX_PLY]{};
     Move bestMoveRoot_;
-    Move ttMoveByPly_[MAX_PLY]{};
     std::vector<Move> rootMoves_;
     std::function<void(const SearchResult&)> infoCallback_;
 

@@ -2,6 +2,7 @@
 #include "engine/attacks.h"
 #include "engine/movegen.h"
 #include "engine/types.h"
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -45,6 +46,19 @@ static bool containsExactMove(const chess::MoveList& moves, const chess::Move& t
     return false;
 }
 
+static bool slowTestsEnabled() {
+    const char* value = std::getenv("CHESS_ENGINE_SLOW_TESTS");
+    if (!value) return false;
+    std::string enabled(value);
+    return enabled != "0" && enabled != "false" && enabled != "FALSE";
+}
+
+static void checkSlowPerft(chess::MoveGenerator& gen, const chess::Board& board,
+                           int depth, uint64_t expected) {
+    if (slowTestsEnabled())
+        CHECK(gen.perft(board, depth) == expected);
+}
+
 static void checkNoisyMatchesFilteredLegalMoves(const std::string& fen) {
     chess::MoveGenerator gen;
     chess::Board fullBoard(fen);
@@ -78,7 +92,7 @@ void test_startpos_perft() {
     CHECK(gen.perft(b, 2) == 400);
     CHECK(gen.perft(b, 3) == 8902);
     CHECK(gen.perft(b, 4) == 197281);
-    std::cout << "     perft(5)=" << gen.perft(b, 5) << " (expect 4865609)" << std::endl;
+    checkSlowPerft(gen, b, 5, 4865609);
 }
 
 // Kiwipete position (perft by Steven Edwards)
@@ -89,7 +103,7 @@ void test_kiwipete_perft() {
     CHECK(gen.perft(b, 1) == 48);
     CHECK(gen.perft(b, 2) == 2039);
     CHECK(gen.perft(b, 3) == 97862);
-    std::cout << "     perft(4)=" << gen.perft(b, 4) << " (expect 4085603)" << std::endl;
+    checkSlowPerft(gen, b, 4, 4085603);
 }
 
 // Position 3
@@ -102,7 +116,7 @@ void test_pos3_perft() {
     CHECK(gen.perft(b, 3) == 2812);
     CHECK(gen.perft(b, 4) == 43238);
     CHECK(gen.perft(b, 5) == 674624);
-    std::cout << "     perft(6)=" << gen.perft(b, 6) << " (expect 11030083)" << std::endl;
+    checkSlowPerft(gen, b, 6, 11030083);
 }
 
 // Position 4
@@ -114,7 +128,7 @@ void test_pos4_perft() {
     CHECK(gen.perft(b, 2) == 264);
     CHECK(gen.perft(b, 3) == 9467);
     CHECK(gen.perft(b, 4) == 422333);
-    std::cout << "     perft(5)=" << gen.perft(b, 5) << " (expect 15833292)" << std::endl;
+    checkSlowPerft(gen, b, 5, 15833292);
 }
 
 // Position 5
@@ -125,7 +139,7 @@ void test_pos5_perft() {
     CHECK(gen.perft(b, 1) == 44);
     CHECK(gen.perft(b, 2) == 1486);
     CHECK(gen.perft(b, 3) == 62379);
-    std::cout << "     perft(4)=" << gen.perft(b, 4) << " (expect 2103487)" << std::endl;
+    checkSlowPerft(gen, b, 4, 2103487);
 }
 
 // Position 6
@@ -136,7 +150,7 @@ void test_pos6_perft() {
     CHECK(gen.perft(b, 1) == 46);
     CHECK(gen.perft(b, 2) == 2079);
     CHECK(gen.perft(b, 3) == 89890);
-    std::cout << "     perft(4)=" << gen.perft(b, 4) << " (expect 3894594)" << std::endl;
+    checkSlowPerft(gen, b, 4, 3894594);
 }
 
 void test_noCastlingWithoutRook() {

@@ -2,67 +2,173 @@
 #include <algorithm>
 
 namespace chess {
+namespace {
+
+constexpr int EXACT_BOUND_BONUS = 8;
+constexpr int AGE_PENALTY = 4;
+constexpr uint8_t TT_BOUND_MASK = 0x03;
+constexpr uint8_t TT_GENERATION_MASK = 0x3F;
+constexpr int TT_MATE_SCORE = 999900;
+constexpr int TT_PACKED_MATE = 32000;
+constexpr int TT_CP_SCORE_LIMIT = 30000;
+
+int replacementPriority(int8_t depth, Bound bound) {
+    return int(depth) * 2 + (bound == Bound::EXACT ? EXACT_BOUND_BONUS : 0);
+}
+
+int entryAge(const TTEntry& entry, uint8_t currentGeneration) {
+    return (currentGeneration + TT_GENERATION_MASK + 1 - entry.generation()) &
+           TT_GENERATION_MASK;
+}
+
+int replacementPriority(const TTEntry& entry, uint8_t currentGeneration) {
+    return replacementPriority(entry.depth, entry.bound()) -
+           entryAge(entry, currentGeneration) * AGE_PENALTY;
+}
+
+uint8_t makeMetadata(Bound bound, uint8_t generation) {
+    return static_cast<uint8_t>(((generation & TT_GENERATION_MASK) << 2) |
+                                (static_cast<uint8_t>(bound) & TT_BOUND_MASK));
+}
+
+int16_t packScore(int score) {
+    if (score > TT_MATE_SCORE - MAX_PLY) {
+        int pliesFromMate = TT_MATE_SCORE - score;
+        return static_cast<int16_t>(TT_PACKED_MATE - std::clamp(pliesFromMate, 0, MAX_PLY));
+    }
+    if (score < -TT_MATE_SCORE + MAX_PLY) {
+        int pliesFromMate = TT_MATE_SCORE + score;
+        return static_cast<int16_t>(-TT_PACKED_MATE + std::clamp(pliesFromMate, 0, MAX_PLY));
+    }
+    return static_cast<int16_t>(std::clamp(score, -TT_CP_SCORE_LIMIT, TT_CP_SCORE_LIMIT));
+}
+
+int unpackScore(int16_t score) {
+    if (score > TT_CP_SCORE_LIMIT)
+        return TT_MATE_SCORE - (TT_PACKED_MATE - score);
+    if (score < -TT_CP_SCORE_LIMIT)
+        return -TT_MATE_SCORE + (score + TT_PACKED_MATE);
+    return score;
+}
+
+int16_t packStaticEval(int staticEval) {
+    if (staticEval == TT_STATIC_EVAL_NONE)
+        return static_cast<int16_t>(TT_STATIC_EVAL_NONE);
+    return static_cast<int16_t>(std::clamp(staticEval, -TT_STATIC_EVAL_NONE + 1,
+                                           TT_STATIC_EVAL_NONE - 1));
+}
+
+void writeEntry(TTEntry& entry, uint64_t hash, int score, int8_t depth,
+                Bound bound, Move move, int staticEval, uint8_t generation) {
+    entry.hash = hash;
+    entry.score = packScore(score);
+    entry.staticEval = packStaticEval(staticEval);
+    entry.depth = depth;
+    entry.metadata = makeMetadata(bound, generation);
+    entry.move = TranspositionTable::packMove(move);
+}
+
+} // namespace
+
+int TTEntry::scoreValue() const {
+    return unpackScore(score);
+}
 
 void TranspositionTable::setSize(int mb) {
+    if (mb < 1) mb = 1;
+
     // Compute number of entries from MB (16 bytes per entry)
     size_t bytes = static_cast<size_t>(mb) * 1024 * 1024;
     size_t entryCount = bytes / sizeof(TTEntry);
     if (entryCount < 1024) entryCount = 1024;
+    size_t clusterCount = entryCount / TT_CLUSTER_SIZE;
+    if (clusterCount < 1) clusterCount = 1;
 
-    // Round to power of 2
+    // Round down so the UCI Hash option remains an allocation cap.
     size_t pow2 = 1;
-    while (pow2 < entryCount) pow2 <<= 1;
-    entries_.resize(pow2);
+    while (pow2 <= clusterCount / 2) pow2 <<= 1;
+    clusters_.resize(pow2);
 
     clear();
 }
 
 void TranspositionTable::clear() {
-    std::fill(entries_.begin(), entries_.end(), TTEntry{0, 0, 0, 0, 0});
+    generation_ = 0;
+    for (TTCluster& cluster : clusters_)
+        cluster.entries.fill(TTEntry{0, 0, TT_STATIC_EVAL_NONE, 0, 0, 0});
+}
+
+void TranspositionTable::newSearch() {
+    generation_ = (generation_ + 1) & TT_GENERATION_MASK;
 }
 
 const TTEntry* TranspositionTable::probe(uint64_t hash) const {
-    if (entries_.empty()) return nullptr;
+    if (clusters_.empty()) return nullptr;
 
-    size_t idx = hash & (entries_.size() - 1);
-    const TTEntry& entry = entries_[idx];
-
-    if (entry.hash == hash)
-        return &entry;
+    size_t idx = hash & (clusters_.size() - 1);
+    const TTCluster& cluster = clusters_[idx];
+    for (const TTEntry& entry : cluster.entries) {
+        if (entry.hash == hash)
+            return &entry;
+    }
     return nullptr;
 }
 
-void TranspositionTable::store(uint64_t hash, int score, int8_t depth, Bound bound, Move move) {
-    if (entries_.empty()) return;
+void TranspositionTable::store(uint64_t hash, int score, int8_t depth, Bound bound, Move move,
+                               int staticEval) {
+    if (clusters_.empty()) return;
 
-    size_t idx = hash & (entries_.size() - 1);
-    TTEntry& entry = entries_[idx];
+    size_t idx = hash & (clusters_.size() - 1);
+    TTCluster& cluster = clusters_[idx];
 
-    if (entry.hash != 0 && entry.hash != hash && entry.depth > depth)
-        return;
-    if (entry.hash == hash && entry.depth > depth && bound != Bound::EXACT)
-        return;
-    if (entry.hash != 0 && entry.hash != hash &&
-        entry.depth == depth &&
-        entry.bound == static_cast<uint8_t>(Bound::EXACT) &&
-        bound != Bound::EXACT) {
+    for (TTEntry& entry : cluster.entries) {
+        if (entry.hash != hash)
+            continue;
+        if (entry.depth > depth && bound != Bound::EXACT) {
+            entry.metadata = makeMetadata(entry.bound(), generation_);
+            if (staticEval != TT_STATIC_EVAL_NONE && !entry.hasStaticEval())
+                entry.staticEval = packStaticEval(staticEval);
+            return;
+        }
+        writeEntry(entry, hash, score, depth, bound, move, staticEval, generation_);
         return;
     }
 
-    entry.hash = hash;
-    entry.score = score;
-    entry.depth = depth;
-    entry.bound = static_cast<uint8_t>(bound);
-    entry.move = packMove(move);
+    for (TTEntry& entry : cluster.entries) {
+        if (entry.hash == 0) {
+            writeEntry(entry, hash, score, depth, bound, move, staticEval, generation_);
+            return;
+        }
+    }
+
+    TTEntry* victim = &cluster.entries[0];
+    for (TTEntry& entry : cluster.entries) {
+        if (replacementPriority(entry, generation_) < replacementPriority(*victim, generation_))
+            victim = &entry;
+    }
+
+    if (replacementPriority(depth, bound) < replacementPriority(*victim, generation_))
+        return;
+
+    writeEntry(*victim, hash, score, depth, bound, move, staticEval, generation_);
 }
 
 int TranspositionTable::hashFull() const {
-    if (entries_.empty()) return 0;
+    if (clusters_.empty()) return 0;
     int used = 0;
-    for (size_t i = 0; i < std::min(entries_.size(), size_t(1000)); i++) {
-        if (entries_[i].hash != 0) used++;
+    int sampled = 0;
+    for (const TTCluster& cluster : clusters_) {
+        for (const TTEntry& entry : cluster.entries) {
+            if (sampled >= 1000)
+                break;
+            if (entry.hash != 0)
+                used++;
+            sampled++;
+        }
+        if (sampled >= 1000)
+            break;
     }
-    return static_cast<int>(used * 1000 / std::min(entries_.size(), size_t(1000)));
+    return sampled == 0 ? 0 : static_cast<int>(used * 1000 / sampled);
 }
 
 uint16_t TranspositionTable::packMove(Move m) {

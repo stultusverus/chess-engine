@@ -20,6 +20,8 @@ public:
 
     void setMaxPly(int ply) { maxHalfMoves_ = ply * 2; }
     int maxPly() const { return maxHalfMoves_ / 2; }
+    void setRandom(bool random) { random_ = random; }
+    bool random() const { return random_; }
 
     std::optional<Move> probe(const Board& board) const;
     static uint64_t polyglotHash(const Board& board);
@@ -35,6 +37,7 @@ private:
 
     std::vector<Entry> entries_;
     int maxHalfMoves_ = 20;
+    bool random_ = true;
 };
 
 } // namespace chess

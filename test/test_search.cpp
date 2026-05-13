@@ -58,7 +58,7 @@ void test_ttStoresMateScaleScore() {
 
     const chess::TTEntry* entry = tt.probe(0x123456789ABCDEF0ULL);
     CHECK(entry != nullptr);
-    CHECK(entry->score == 999900);
+    CHECK(entry->scoreValue() == 999900);
     CHECK(chess::TranspositionTable::unpackMove(entry->move).from == chess::D1);
     CHECK(chess::TranspositionTable::unpackMove(entry->move).to == chess::D8);
 }
@@ -68,26 +68,118 @@ void test_ttDepthPreferredReplacement() {
     tt.setSize(1);
 
     uint64_t deepHash = 0x1234000000000001ULL;
-    uint64_t shallowHash = 0x5678000000000001ULL;
+    uint64_t shallowExactHash = 0x5678000000000001ULL;
+    uint64_t mediumHash = 0x9ABC000000000001ULL;
+    uint64_t otherHash = 0xDEF0000000000001ULL;
+    uint64_t replacementHash = 0x2468000000000001ULL;
     chess::Move deepMove(chess::D1, chess::D8);
     chess::Move shallowMove(chess::A2, chess::A3);
+    chess::Move mediumMove(chess::C2, chess::C4);
+    chess::Move otherMove(chess::G1, chess::F3);
     chess::Move newerMove(chess::B2, chess::B4);
 
     tt.store(deepHash, 100, 8, chess::Bound::LOWER, deepMove);
-    tt.store(shallowHash, 20, 2, chess::Bound::EXACT, shallowMove);
+    tt.store(shallowExactHash, 20, 2, chess::Bound::EXACT, shallowMove);
+    tt.store(mediumHash, 40, 4, chess::Bound::LOWER, mediumMove);
+    tt.store(otherHash, 60, 6, chess::Bound::LOWER, otherMove);
 
     const chess::TTEntry* deepEntry = tt.probe(deepHash);
     CHECK(deepEntry != nullptr);
     CHECK(deepEntry->depth == 8);
     CHECK(chess::TranspositionTable::unpackMove(deepEntry->move).from == chess::D1);
+    CHECK(tt.probe(shallowExactHash) != nullptr);
+    CHECK(tt.probe(mediumHash) != nullptr);
+    CHECK(tt.probe(otherHash) != nullptr);
 
-    tt.store(shallowHash, 30, 10, chess::Bound::EXACT, newerMove);
+    tt.store(replacementHash, 30, 5, chess::Bound::EXACT, newerMove);
 
-    CHECK(tt.probe(deepHash) == nullptr);
-    const chess::TTEntry* replacement = tt.probe(shallowHash);
+    CHECK(tt.probe(deepHash) != nullptr);
+    CHECK(tt.probe(shallowExactHash) != nullptr);
+    CHECK(tt.probe(mediumHash) == nullptr);
+    CHECK(tt.probe(otherHash) != nullptr);
+    const chess::TTEntry* replacement = tt.probe(replacementHash);
     CHECK(replacement != nullptr);
-    CHECK(replacement->depth == 10);
+    CHECK(replacement->depth == 5);
     CHECK(chess::TranspositionTable::unpackMove(replacement->move).from == chess::B2);
+}
+
+void test_ttStoresGenerationMetadata() {
+    chess::TranspositionTable tt;
+    tt.setSize(1);
+    CHECK(tt.generation() == 0);
+
+    tt.newSearch();
+    chess::Move move(chess::A2, chess::A4);
+    tt.store(0x1234000000000001ULL, 12, 3, chess::Bound::LOWER, move);
+
+    const chess::TTEntry* entry = tt.probe(0x1234000000000001ULL);
+    CHECK(entry != nullptr);
+    CHECK(entry->bound() == chess::Bound::LOWER);
+    CHECK(entry->generation() == tt.generation());
+    CHECK(sizeof(chess::TTEntry) == 16);
+
+    tt.clear();
+    CHECK(tt.generation() == 0);
+    CHECK(tt.probe(0x1234000000000001ULL) == nullptr);
+}
+
+void test_ttAgedEntriesAreReplacedFirst() {
+    chess::TranspositionTable tt;
+    tt.setSize(1);
+
+    uint64_t oldHash = 0x1111000000000001ULL;
+    uint64_t freshAHash = 0x2222000000000001ULL;
+    uint64_t freshBHash = 0x3333000000000001ULL;
+    uint64_t freshCHash = 0x4444000000000001ULL;
+    uint64_t replacementHash = 0x5555000000000001ULL;
+
+    tt.newSearch();
+    tt.store(oldHash, 10, 4, chess::Bound::LOWER, chess::Move(chess::A2, chess::A3));
+
+    tt.newSearch();
+    tt.store(freshAHash, 20, 4, chess::Bound::LOWER, chess::Move(chess::B2, chess::B3));
+    tt.store(freshBHash, 30, 4, chess::Bound::LOWER, chess::Move(chess::C2, chess::C3));
+    tt.store(freshCHash, 40, 4, chess::Bound::LOWER, chess::Move(chess::D2, chess::D3));
+
+    CHECK(tt.probe(oldHash) != nullptr);
+    CHECK(tt.probe(freshAHash) != nullptr);
+    CHECK(tt.probe(freshBHash) != nullptr);
+    CHECK(tt.probe(freshCHash) != nullptr);
+
+    tt.store(replacementHash, 50, 4, chess::Bound::LOWER, chess::Move(chess::E2, chess::E3));
+
+    CHECK(tt.probe(oldHash) == nullptr);
+    CHECK(tt.probe(freshAHash) != nullptr);
+    CHECK(tt.probe(freshBHash) != nullptr);
+    CHECK(tt.probe(freshCHash) != nullptr);
+    const chess::TTEntry* replacement = tt.probe(replacementHash);
+    CHECK(replacement != nullptr);
+    CHECK(replacement->generation() == tt.generation());
+}
+
+void test_ttStoresStaticEval() {
+    chess::TranspositionTable tt;
+    tt.setSize(1);
+    chess::Move move(chess::E2, chess::E4);
+
+    tt.store(0x1234000000000001ULL, 45, 4, chess::Bound::EXACT, move, -23);
+
+    const chess::TTEntry* entry = tt.probe(0x1234000000000001ULL);
+    CHECK(entry != nullptr);
+    CHECK(entry->scoreValue() == 45);
+    CHECK(entry->hasStaticEval());
+    CHECK(entry->staticEvalValue() == -23);
+    CHECK(sizeof(chess::TTEntry) == 16);
+}
+
+void test_ttSizeDoesNotExceedRequestedMb() {
+    chess::TranspositionTable tt;
+    tt.setSize(3);
+
+    size_t requestedBytes = 3ULL * 1024ULL * 1024ULL;
+    size_t allocatedBytes = static_cast<size_t>(tt.size()) * sizeof(chess::TTEntry);
+    CHECK(allocatedBytes <= requestedBytes);
+    CHECK(tt.size() > 0);
 }
 
 // Back-rank mate in 1: Rd1-d8#
@@ -337,6 +429,10 @@ int main() {
     RUN_TEST(ttMovePackingPromotion);
     RUN_TEST(ttStoresMateScaleScore);
     RUN_TEST(ttDepthPreferredReplacement);
+    RUN_TEST(ttStoresGenerationMetadata);
+    RUN_TEST(ttAgedEntriesAreReplacedFirst);
+    RUN_TEST(ttStoresStaticEval);
+    RUN_TEST(ttSizeDoesNotExceedRequestedMb);
     RUN_TEST(mateInOneAtDepth1);
     RUN_TEST(mateInOne);
     RUN_TEST(captureHangingQueen);

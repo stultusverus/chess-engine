@@ -7,8 +7,8 @@
 - [x] `src/engine/board.h/cpp` — Bitboard representation, make/unmake move, FEN import/export, Zobrist hashing
 - [x] `src/engine/movegen.h/cpp` — Magic bitboard move generation, legal move filtering. Perft-verified
 - [x] `src/engine/eval.h/cpp` — Tapered evaluation with PeSTO piece-square tables (MG/EG)
-- [x] `src/engine/search.h/cpp` — Alpha-beta with PVS, iterative deepening, quiescence, LMR, null move pruning (zugzwang guard), killer/history heuristic
-- [x] `src/engine/tt.h/cpp` — Transposition table (always-replace, 16B entries)
+- [x] `src/engine/search.h/cpp` — Alpha-beta with PVS, iterative deepening, quiescence, staged move picking, LMR, null move pruning (zugzwang guard), killer/history/countermove heuristics
+- [x] `src/engine/tt.h/cpp` — 4-way clustered, generation-aware transposition table with static eval storage (16B entries)
 - [x] `src/engine/book.h/cpp` — Polyglot opening book loader (.bin format, weighted random selection)
 - [x] `src/engine/uci.h/cpp` — UCI protocol (position, go, stop, setoption, time management, WDL support)
 - [x] `src/engine/poly_keys.h` — Polyglot Zobrist key constants (header-only)
@@ -41,6 +41,8 @@
 - [x] Quiescence noisy-move generation — qsearch now uses dedicated legal captures/en-passant/promotions outside check instead of generating all legal moves and filtering.
 - [x] Real static exchange evaluation — capture ordering and quiescence pruning use SEE with x-ray, pin, promotion, and en-passant handling.
 - [x] Incremental material/PST state, pawn hash, and eval cache — board make/unmake now maintains eval state, pawn structure is cached by pawn hash, and full evals are cached by position hash.
+- [x] Staged move picker and lazy SEE — search orders TT moves, good captures/promotions, killers/countermoves, quiet history, and bad captures without scoring every capture up front.
+- [x] TT static eval reuse — transposition-table entries retain static evals already computed for pruning while preserving 16-byte entries.
 
 ## Current Review Findings
 
@@ -49,6 +51,13 @@
 - [x] Normalize en-passant FEN/hash handling. Syntactically valid EP targets are accepted, but EP is hashed only when an EP capture is possible.
 - [x] Remove advertised `Ponder` support until true ponder continuation is implemented.
 - [x] Add regression tests for the above UCI/book/FEN edge cases.
+- [x] Fix null-move en-passant hash removal. `Board::makeNullMove` now removes any EP hash key using the old side to move before toggling side.
+- [x] Make UCI `Hash` an allocation cap by rounding TT entries down to a power of two.
+- [x] Give serial `MultiPV` searches a shared time origin for time-managed searches.
+- [x] Restrict broad internal iterative deepening to deeper PV nodes.
+- [x] Reject unsupported `go ponder` with an `info string` diagnostic and `bestmove 0000`.
+- [x] Add UCI `Book Max Ply` to configure the opening-book cutoff.
+- [x] Add UCI `Book Random` to allow deterministic highest-weight book selection.
 
 ## Performance Backlog
 
@@ -56,9 +65,20 @@
 - [x] Add incremental material/PST state, pawn hash, and eval cache.
 - [x] Improve search infrastructure with depth-preferred TT replacement and soft/hard time management.
 - [x] Improve search tuning with better LMR, reverse futility/razoring, continuation history, and capture history.
+- [x] Add a staged move picker: TT move, good captures/promotions, killers/countermoves, quiet history, then bad captures.
+- [x] Avoid eager SEE for every capture during full move sorting; compute SEE lazily where possible.
+- [x] Upgrade TT replacement with 2-way/4-way clustered buckets and generation/age.
+- [x] Store static evaluation in TT entries if it improves pruning/eval reuse.
+- [x] Add machine-readable JSON speed and tactical benchmark modes around fixed positions and EPD suites.
+- [x] Add optional slow perft assertions behind `CHESS_ENGINE_SLOW_TESTS`.
+- [x] Add deterministic make/unmake invariant tests comparing FEN, hash, pawn hash, eval state, and generated move legality.
+- [x] Add fixed-seed pseudo-random make/unmake invariant tests for broader generated-position coverage.
+- [x] Upgrade TT replacement to 4-way clustered buckets with depth/exact-preferred replacement.
+- [x] Add TT generation/age.
 
 ## Strategic Backlog
 
 - [ ] Optional Syzygy probing behind compile/runtime configuration.
+- [ ] Automated classical eval tuning using Texel or SPSA before adding many more hand-tuned terms.
 - [ ] NNUE evaluation experiment after SPRT and tactical benchmark baselines are stable.
 - [ ] SMP search with UCI `Threads` after single-thread search behavior is stable.

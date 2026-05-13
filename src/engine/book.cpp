@@ -187,6 +187,15 @@ std::optional<Move> Book::probe(const Board& board) const {
     if (totalWeight == 0)
         return std::nullopt;
 
+    if (!random_) {
+        const Entry* best = matches[0];
+        for (const auto* e : matches) {
+            if (e->weight > best->weight)
+                best = e;
+        }
+        return fixupPolyglotMove(decodePolyglotMove(best->move));
+    }
+
     static std::mt19937_64 rng(std::random_device{}());
     uint64_t r = rng() % totalWeight;
 
