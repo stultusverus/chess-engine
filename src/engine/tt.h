@@ -7,6 +7,8 @@
 
 namespace chess {
 
+constexpr int TT_STATIC_EVAL_NONE = 32767;
+
 enum class Bound : uint8_t {
     NONE = 0,
     EXACT = 1,
@@ -17,11 +19,15 @@ enum class Bound : uint8_t {
 #pragma pack(push, 1)
 struct TTEntry {
     uint64_t hash;
-    int32_t score;
+    int16_t score;
+    int16_t staticEval;
     int8_t depth;
     uint8_t metadata; // low 2 bits: Bound, high 6 bits: generation
     uint16_t move; // packed: from | (to << 6) | (promotion << 12)
 
+    int scoreValue() const;
+    bool hasStaticEval() const { return staticEval != TT_STATIC_EVAL_NONE; }
+    int staticEvalValue() const { return staticEval; }
     Bound bound() const { return static_cast<Bound>(metadata & 0x03); }
     uint8_t generation() const { return metadata >> 2; }
 };
@@ -49,8 +55,9 @@ public:
     // Returns pointer to entry, nullptr if not found
     const TTEntry* probe(uint64_t hash) const;
 
-    // Store entry using depth-preferred replacement.
-    void store(uint64_t hash, int score, int8_t depth, Bound bound, Move move);
+    // Store entry using depth/generation-preferred replacement.
+    void store(uint64_t hash, int score, int8_t depth, Bound bound, Move move,
+               int staticEval = TT_STATIC_EVAL_NONE);
 
     // Pack/Unpack move
     static uint16_t packMove(Move m);

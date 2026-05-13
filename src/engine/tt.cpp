@@ -1,4 +1,5 @@
 #include "tt.h"
+#include <algorithm>
 
 namespace chess {
 namespace {
@@ -7,6 +8,9 @@ constexpr int EXACT_BOUND_BONUS = 8;
 constexpr int AGE_PENALTY = 4;
 constexpr uint8_t TT_BOUND_MASK = 0x03;
 constexpr uint8_t TT_GENERATION_MASK = 0x3F;
+constexpr int TT_MATE_SCORE = 999900;
+constexpr int TT_PACKED_MATE = 32000;
+constexpr int TT_CP_SCORE_LIMIT = 30000;
 
 int replacementPriority(int8_t depth, Bound bound) {
     return int(depth) * 2 + (bound == Bound::EXACT ? EXACT_BOUND_BONUS : 0);
@@ -27,16 +31,48 @@ uint8_t makeMetadata(Bound bound, uint8_t generation) {
                                 (static_cast<uint8_t>(bound) & TT_BOUND_MASK));
 }
 
+int16_t packScore(int score) {
+    if (score > TT_MATE_SCORE - MAX_PLY) {
+        int pliesFromMate = TT_MATE_SCORE - score;
+        return static_cast<int16_t>(TT_PACKED_MATE - std::clamp(pliesFromMate, 0, MAX_PLY));
+    }
+    if (score < -TT_MATE_SCORE + MAX_PLY) {
+        int pliesFromMate = TT_MATE_SCORE + score;
+        return static_cast<int16_t>(-TT_PACKED_MATE + std::clamp(pliesFromMate, 0, MAX_PLY));
+    }
+    return static_cast<int16_t>(std::clamp(score, -TT_CP_SCORE_LIMIT, TT_CP_SCORE_LIMIT));
+}
+
+int unpackScore(int16_t score) {
+    if (score > TT_CP_SCORE_LIMIT)
+        return TT_MATE_SCORE - (TT_PACKED_MATE - score);
+    if (score < -TT_CP_SCORE_LIMIT)
+        return -TT_MATE_SCORE + (score + TT_PACKED_MATE);
+    return score;
+}
+
+int16_t packStaticEval(int staticEval) {
+    if (staticEval == TT_STATIC_EVAL_NONE)
+        return static_cast<int16_t>(TT_STATIC_EVAL_NONE);
+    return static_cast<int16_t>(std::clamp(staticEval, -TT_STATIC_EVAL_NONE + 1,
+                                           TT_STATIC_EVAL_NONE - 1));
+}
+
 void writeEntry(TTEntry& entry, uint64_t hash, int score, int8_t depth,
-                Bound bound, Move move, uint8_t generation) {
+                Bound bound, Move move, int staticEval, uint8_t generation) {
     entry.hash = hash;
-    entry.score = score;
+    entry.score = packScore(score);
+    entry.staticEval = packStaticEval(staticEval);
     entry.depth = depth;
     entry.metadata = makeMetadata(bound, generation);
     entry.move = TranspositionTable::packMove(move);
 }
 
 } // namespace
+
+int TTEntry::scoreValue() const {
+    return unpackScore(score);
+}
 
 void TranspositionTable::setSize(int mb) {
     if (mb < 1) mb = 1;
@@ -59,7 +95,7 @@ void TranspositionTable::setSize(int mb) {
 void TranspositionTable::clear() {
     generation_ = 0;
     for (TTCluster& cluster : clusters_)
-        cluster.entries.fill(TTEntry{0, 0, 0, 0, 0});
+        cluster.entries.fill(TTEntry{0, 0, TT_STATIC_EVAL_NONE, 0, 0, 0});
 }
 
 void TranspositionTable::newSearch() {
@@ -78,7 +114,8 @@ const TTEntry* TranspositionTable::probe(uint64_t hash) const {
     return nullptr;
 }
 
-void TranspositionTable::store(uint64_t hash, int score, int8_t depth, Bound bound, Move move) {
+void TranspositionTable::store(uint64_t hash, int score, int8_t depth, Bound bound, Move move,
+                               int staticEval) {
     if (clusters_.empty()) return;
 
     size_t idx = hash & (clusters_.size() - 1);
@@ -89,15 +126,17 @@ void TranspositionTable::store(uint64_t hash, int score, int8_t depth, Bound bou
             continue;
         if (entry.depth > depth && bound != Bound::EXACT) {
             entry.metadata = makeMetadata(entry.bound(), generation_);
+            if (staticEval != TT_STATIC_EVAL_NONE && !entry.hasStaticEval())
+                entry.staticEval = packStaticEval(staticEval);
             return;
         }
-        writeEntry(entry, hash, score, depth, bound, move, generation_);
+        writeEntry(entry, hash, score, depth, bound, move, staticEval, generation_);
         return;
     }
 
     for (TTEntry& entry : cluster.entries) {
         if (entry.hash == 0) {
-            writeEntry(entry, hash, score, depth, bound, move, generation_);
+            writeEntry(entry, hash, score, depth, bound, move, staticEval, generation_);
             return;
         }
     }
@@ -111,7 +150,7 @@ void TranspositionTable::store(uint64_t hash, int score, int8_t depth, Bound bou
     if (replacementPriority(depth, bound) < replacementPriority(*victim, generation_))
         return;
 
-    writeEntry(*victim, hash, score, depth, bound, move, generation_);
+    writeEntry(*victim, hash, score, depth, bound, move, staticEval, generation_);
 }
 
 int TranspositionTable::hashFull() const {

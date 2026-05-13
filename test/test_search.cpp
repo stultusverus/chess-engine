@@ -58,7 +58,7 @@ void test_ttStoresMateScaleScore() {
 
     const chess::TTEntry* entry = tt.probe(0x123456789ABCDEF0ULL);
     CHECK(entry != nullptr);
-    CHECK(entry->score == 999900);
+    CHECK(entry->scoreValue() == 999900);
     CHECK(chess::TranspositionTable::unpackMove(entry->move).from == chess::D1);
     CHECK(chess::TranspositionTable::unpackMove(entry->move).to == chess::D8);
 }
@@ -155,6 +155,21 @@ void test_ttAgedEntriesAreReplacedFirst() {
     const chess::TTEntry* replacement = tt.probe(replacementHash);
     CHECK(replacement != nullptr);
     CHECK(replacement->generation() == tt.generation());
+}
+
+void test_ttStoresStaticEval() {
+    chess::TranspositionTable tt;
+    tt.setSize(1);
+    chess::Move move(chess::E2, chess::E4);
+
+    tt.store(0x1234000000000001ULL, 45, 4, chess::Bound::EXACT, move, -23);
+
+    const chess::TTEntry* entry = tt.probe(0x1234000000000001ULL);
+    CHECK(entry != nullptr);
+    CHECK(entry->scoreValue() == 45);
+    CHECK(entry->hasStaticEval());
+    CHECK(entry->staticEvalValue() == -23);
+    CHECK(sizeof(chess::TTEntry) == 16);
 }
 
 void test_ttSizeDoesNotExceedRequestedMb() {
@@ -416,6 +431,7 @@ int main() {
     RUN_TEST(ttDepthPreferredReplacement);
     RUN_TEST(ttStoresGenerationMetadata);
     RUN_TEST(ttAgedEntriesAreReplacedFirst);
+    RUN_TEST(ttStoresStaticEval);
     RUN_TEST(ttSizeDoesNotExceedRequestedMb);
     RUN_TEST(mateInOneAtDepth1);
     RUN_TEST(mateInOne);

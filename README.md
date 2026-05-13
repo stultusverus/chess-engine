@@ -11,8 +11,8 @@ src/engine/               # Chess engine core
 ├── board.h/cpp           #   Bitboard board, FEN, make/unmake, Zobrist hash, incremental eval state
 ├── movegen.h/cpp         #   Check/pin-aware legal move generation (perft-verified)
 ├── eval.h/cpp            #   Tapered PeSTO eval + pawn/eval caches, mobility, king safety
-├── search.h/cpp          #   Alpha-beta PVS + iterative deepening + LMR + null move pruning
-├── tt.h/cpp              #   4-way clustered, generation-aware transposition table (16B entries)
+├── search.h/cpp          #   Alpha-beta PVS + staged move picking + LMR + null move pruning
+├── tt.h/cpp              #   4-way clustered, generation-aware TT with static eval storage (16B entries)
 ├── book.h/cpp            #   Polyglot opening book loader (.bin format, weighted random)
 ├── uci.h/cpp             #   UCI protocol handler (WDL support, time management)
 └── poly_keys.h           #   Polyglot Zobrist key constants (header-only)
@@ -91,12 +91,11 @@ Recently fixed review items:
 - The UCI `Hash` option is an allocation cap; TT entries round down to a power of two.
 - Serial `MultiPV` searches share the same time origin for time-managed searches.
 - Unsupported `go ponder` returns `bestmove 0000` with an `info string` diagnostic.
-- The transposition table uses 4-way clustered buckets with generation-aware replacement.
+- The transposition table uses 4-way clustered buckets with generation-aware replacement and static eval reuse.
+- Search uses a staged move picker with lazy SEE for captures: TT move, good captures/promotions, killers/countermoves, quiet history, then bad captures.
 
 High-value strength/performance work:
 
-- Staged move picker with lazy SEE for captures.
-- Optional static-eval storage in TT entries if profiling shows search reuse gains.
 - Automated classical eval tuning with Texel/SPSA.
 - Fixed-node/depth tactical EPD and speed benchmark suites.
 - Optional Syzygy probing, NNUE experiments, and eventually SMP/`Threads`.
