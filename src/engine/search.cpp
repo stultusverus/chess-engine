@@ -543,6 +543,9 @@ bool Search::rootMoveAllowed(Move m) const {
 std::vector<Move> Search::extractPv(Board board, Move bestMove, int maxDepth) const {
     std::vector<Move> pv;
     Move next = bestMove;
+    uint64_t seenHashes[MAX_PLY]{};
+    int seenCount = 0;
+    seenHashes[seenCount++] = board.hash();
 
     for (int i = 0; i < maxDepth && next.from != SQ_NONE && next.to != SQ_NONE; i++) {
         UndoInfo undo;
@@ -551,7 +554,23 @@ std::vector<Move> Search::extractPv(Board board, Move bestMove, int maxDepth) co
 
         pv.push_back(undo.move);
 
-        const TTEntry* entry = tt_.probe(board.hash());
+        if (board.halfMoveClock() >= 100 || board.isRepetition())
+            break;
+
+        uint64_t hash = board.hash();
+        bool alreadySeen = false;
+        for (int j = 0; j < seenCount; j++) {
+            if (seenHashes[j] == hash) {
+                alreadySeen = true;
+                break;
+            }
+        }
+        if (alreadySeen)
+            break;
+        if (seenCount < MAX_PLY)
+            seenHashes[seenCount++] = hash;
+
+        const TTEntry* entry = tt_.probe(hash);
         if (!entry)
             break;
         next = tt_.unpackMove(entry->move);
