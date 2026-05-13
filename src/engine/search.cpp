@@ -8,6 +8,22 @@ namespace chess {
 
 static constexpr int INF = 1000000;
 
+namespace {
+
+bool isCaptureMove(Move m) {
+    return m.type == CAPTURE || m.type == PROMOTION_CAPTURE || m.type == EN_PASSANT;
+}
+
+bool isQuietHistoryMove(Move m) {
+    return !isCaptureMove(m) && m.type != PROMOTION && m.type != PROMOTION_CAPTURE;
+}
+
+bool sameMove(Move a, Move b) {
+    return a.from == b.from && a.to == b.to && a.promotion == b.promotion;
+}
+
+} // namespace
+
 Search::Search() {
     tt_.setSize(64);
     ageHistory();
@@ -66,6 +82,8 @@ SearchResult Search::search(const Board& board, int maxDepth) {
     bestMoveRoot_ = Move();
     nodesLimit_ = 1024;
     std::fill(std::begin(ttMoveByPly_), std::end(ttMoveByPly_), Move());
+    std::fill(std::begin(continuationPieceByPly_), std::end(continuationPieceByPly_), NO_PIECE);
+    std::fill(std::begin(continuationToByPly_), std::end(continuationToByPly_), SQ_NONE);
     ageHistory();
 
     startTime_ = std::chrono::steady_clock::now();
@@ -189,6 +207,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         if (stmAll != stmPawnKing) {
             NullUndo nullUndo;
             board.makeNullMove(nullUndo);
+            clearContinuationContext(ply + 1);
             int R = 3 + depth / 4;
             int score = -alphaBeta(board, depth - 1 - R, -beta, -beta + 1, ply + 1);
             board.unmakeNullMove(nullUndo);
@@ -231,12 +250,18 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     int movesMade = 0;
     Move bestMoveInNode;
     int staticEval = -INF;
+    Move quietsTried[MAX_MOVES]{};
+    Piece quietPiecesTried[MAX_MOVES]{};
+    int quietsTriedCount = 0;
+    Move capturesTried[MAX_MOVES]{};
+    Piece capturePiecesTried[MAX_MOVES]{};
+    PieceType capturedTypesTried[MAX_MOVES]{};
+    int capturesTriedCount = 0;
 
     for (const Move& m : moves) {
         // Futility pruning
         if (depth <= 2 && !inCheck && movesMade >= 1 &&
-            m.type != CAPTURE && m.type != EN_PASSANT &&
-            m.type != PROMOTION && m.type != PROMOTION_CAPTURE) {
+            !isCaptureMove(m) && m.type != PROMOTION) {
             if (staticEval == -INF) {
                 staticEval = eval_.evaluate(board);
                 if (board.sideToMove() == BLACK) staticEval = -staticEval;
@@ -245,8 +270,27 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
             if (staticEval + margin < alpha) continue;
         }
 
+        Piece movedPiece = board.pieceOn(m.from);
+        PieceType capturedType = capturedTypeForMove(board, m);
         UndoInfo undo;
         if (!board.makeMove(m, undo)) continue;
+
+        if (isQuietHistoryMove(m)) {
+            setContinuationContext(ply + 1, movedPiece, m);
+            if (quietsTriedCount < MAX_MOVES) {
+                quietsTried[quietsTriedCount] = m;
+                quietPiecesTried[quietsTriedCount] = movedPiece;
+                quietsTriedCount++;
+            }
+        } else {
+            clearContinuationContext(ply + 1);
+            if (isCaptureMove(m) && capturedType != PIECE_TYPE_NB && capturesTriedCount < MAX_MOVES) {
+                capturesTried[capturesTriedCount] = m;
+                capturePiecesTried[capturesTriedCount] = movedPiece;
+                capturedTypesTried[capturesTriedCount] = capturedType;
+                capturesTriedCount++;
+            }
+        }
 
         int score;
         if (movesMade == 0) {
@@ -254,7 +298,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         } else {
             // Late-move reductions (LMR): reduce moves beyond the first few
             int reduction = 0;
-            if (depth >= 3 && movesMade >= 4 && !(m.type == CAPTURE || m.type == EN_PASSANT || m.type == PROMOTION || m.type == PROMOTION_CAPTURE)) {
+            if (depth >= 3 && movesMade >= 4 && isQuietHistoryMove(m)) {
                 reduction = 1;
                 if (movesMade >= 8) reduction = 2;
             }
@@ -280,8 +324,22 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                 alpha = score;
                 if (ply == 0) bestMoveRoot_ = m;
                 if (alpha >= beta) {
-                    updateKiller(m, ply);
-                    updateHistory(m, depth);
+                    if (isQuietHistoryMove(m)) {
+                        updateKiller(m, ply);
+                        updateQuietHistory(m, movedPiece, depth, ply, 1);
+                        for (int i = 0; i < quietsTriedCount; i++) {
+                            if (!sameMove(quietsTried[i], m))
+                                updateQuietHistory(quietsTried[i], quietPiecesTried[i], depth, ply, -1);
+                        }
+                    } else if (isCaptureMove(m) && capturedType != PIECE_TYPE_NB) {
+                        updateCaptureHistory(m, movedPiece, capturedType, depth, 1);
+                        for (int i = 0; i < capturesTriedCount; i++) {
+                            if (!sameMove(capturesTried[i], m)) {
+                                updateCaptureHistory(capturesTried[i], capturePiecesTried[i],
+                                                     capturedTypesTried[i], depth, -1);
+                            }
+                        }
+                    }
                     break;
                 }
             }
@@ -381,19 +439,34 @@ int Search::scoreMove(const Board& board, Move m, int ply) const {
         }
     }
 
-    if (m.type == CAPTURE || m.type == PROMOTION_CAPTURE || m.type == EN_PASSANT) {
+    if (isCaptureMove(m)) {
         int see = staticExchangeEval(board, m);
-        score = see >= 0 ? 100000 + see : see;
+        Piece movedPiece = board.pieceOn(m.from);
+        PieceType capturedType = capturedTypeForMove(board, m);
+        int historyScore = 0;
+        if (movedPiece != NO_PIECE && capturedType != PIECE_TYPE_NB)
+            historyScore = captureHistory_[movedPiece][m.to][capturedType];
+        score = (see >= 0 ? 100000 : 0) + see * 16 + historyScore;
+        if (m.type == PROMOTION_CAPTURE && m.promotion != PIECE_TYPE_NB)
+            score += Eval::pieceValue(m.promotion);
     } else if (m.type == PROMOTION) {
         score = 90000 + Eval::pieceValue(m.promotion);
     } else {
         int packed = m.from | (m.to << 6);
+        Piece movedPiece = board.pieceOn(m.from);
+        if (movedPiece != NO_PIECE) {
+            score += quietHistory_[colorOf(movedPiece)][m.from][m.to];
+            if (ply > 0 && ply < MAX_PLY) {
+                Piece previousPiece = continuationPieceByPly_[ply];
+                Square previousTo = continuationToByPly_[ply];
+                if (previousPiece != NO_PIECE && previousTo != SQ_NONE)
+                    score += continuationHistory_[previousPiece][previousTo][movedPiece][m.to] / 2;
+            }
+        }
         if (ply < MAX_PLY && packed == killer1_[ply])
-            score = KILLER_SCORE;
+            score += KILLER_SCORE;
         else if (ply < MAX_PLY && packed == killer2_[ply])
-            score = KILLER_SCORE - 1;
-        if (score == 0)
-            score = history_[m.from][m.to];
+            score += KILLER_SCORE - 1;
     }
 
     return score;
@@ -458,9 +531,21 @@ bool Search::softTimeExpired() const {
 }
 
 void Search::ageHistory() {
-    for (int i = 0; i < 64; i++)
-        for (int j = 0; j < 64; j++)
-            history_[i][j] /= 2;
+    for (int c = 0; c < COLOR_NB; c++)
+        for (int from = 0; from < 64; from++)
+            for (int to = 0; to < 64; to++)
+                quietHistory_[c][from][to] /= 2;
+
+    for (int previousPiece = 0; previousPiece < PIECE_NB; previousPiece++)
+        for (int previousTo = 0; previousTo < 64; previousTo++)
+            for (int movedPiece = 0; movedPiece < PIECE_NB; movedPiece++)
+                for (int to = 0; to < 64; to++)
+                    continuationHistory_[previousPiece][previousTo][movedPiece][to] /= 2;
+
+    for (int movedPiece = 0; movedPiece < PIECE_NB; movedPiece++)
+        for (int to = 0; to < 64; to++)
+            for (int capturedType = 0; capturedType < PIECE_TYPE_NB; capturedType++)
+                captureHistory_[movedPiece][to][capturedType] /= 2;
 }
 
 void Search::updateKiller(Move m, int ply) {
@@ -472,10 +557,59 @@ void Search::updateKiller(Move m, int ply) {
     }
 }
 
-void Search::updateHistory(Move m, int depth) {
-    history_[m.from][m.to] += depth * depth;
-    if (history_[m.from][m.to] > HISTORY_MAX)
-        history_[m.from][m.to] = HISTORY_MAX;
+void Search::updateQuietHistory(Move m, Piece movedPiece, int depth, int ply, int sign) {
+    if (movedPiece == NO_PIECE) return;
+
+    int bonus = std::clamp(depth * depth, 1, HISTORY_MAX);
+    if (sign < 0) bonus = -bonus;
+    updateHistoryValue(quietHistory_[colorOf(movedPiece)][m.from][m.to], bonus);
+
+    if (ply > 0 && ply < MAX_PLY) {
+        Piece previousPiece = continuationPieceByPly_[ply];
+        Square previousTo = continuationToByPly_[ply];
+        if (previousPiece != NO_PIECE && previousTo != SQ_NONE) {
+            updateHistoryValue(continuationHistory_[previousPiece][previousTo][movedPiece][m.to],
+                               bonus);
+        }
+    }
+}
+
+void Search::updateCaptureHistory(Move m, Piece movedPiece, PieceType capturedType, int depth, int sign) {
+    if (movedPiece == NO_PIECE || capturedType == PIECE_TYPE_NB) return;
+
+    int bonus = std::clamp(depth * depth, 1, HISTORY_MAX);
+    if (sign < 0) bonus = -bonus;
+    updateHistoryValue(captureHistory_[movedPiece][m.to][capturedType], bonus);
+}
+
+void Search::updateHistoryValue(int& value, int bonus) {
+    bonus = std::clamp(bonus, -HISTORY_MAX, HISTORY_MAX);
+    value += bonus - value * std::abs(bonus) / HISTORY_MAX;
+    value = std::clamp(value, -HISTORY_MAX, HISTORY_MAX);
+}
+
+PieceType Search::capturedTypeForMove(const Board& board, Move m) const {
+    if (m.type == EN_PASSANT)
+        return PAWN;
+    if (!isCaptureMove(m))
+        return PIECE_TYPE_NB;
+
+    Piece captured = board.pieceOn(m.to);
+    if (captured == NO_PIECE)
+        return PIECE_TYPE_NB;
+    return typeOf(captured);
+}
+
+void Search::setContinuationContext(int ply, Piece movedPiece, Move m) {
+    if (ply < 0 || ply >= MAX_PLY) return;
+    continuationPieceByPly_[ply] = movedPiece;
+    continuationToByPly_[ply] = m.to;
+}
+
+void Search::clearContinuationContext(int ply) {
+    if (ply < 0 || ply >= MAX_PLY) return;
+    continuationPieceByPly_[ply] = NO_PIECE;
+    continuationToByPly_[ply] = SQ_NONE;
 }
 
 bool Search::shouldStop() {
