@@ -367,6 +367,17 @@ void test_invalidFenDoesNotReplaceCurrentPosition() {
     CHECK(!contains(output, "bestmove 0000"));
 }
 
+void test_fenTrailingTokensRejected() {
+    std::string output = runEngine(
+        "position startpos\n"
+        "position fen 4k3/8/8/8/8/8/8/4K3 w - - 0 1 extra\n"
+        "go depth 1\n"
+        "quit\n");
+
+    CHECK(contains(output, "[uci] illegal fen:"));
+    CHECK(contains(output, "bestmove "));
+}
+
 void test_incompleteFenDoesNotReplaceCurrentPosition() {
     std::string output = runEngineWithDelayedQuit(
         "position startpos\n"
@@ -413,6 +424,7 @@ int main() {
     RUN_TEST(multiPvReportsMultipleLines);
     RUN_TEST(matedSideUsesUciMateFormat);
     RUN_TEST(invalidFenDoesNotReplaceCurrentPosition);
+    RUN_TEST(fenTrailingTokensRejected);
     RUN_TEST(incompleteFenDoesNotReplaceCurrentPosition);
     RUN_TEST(unknownPositionTypeDoesNotMutateBoard);
 

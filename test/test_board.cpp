@@ -287,6 +287,19 @@ void test_invalidFenFieldsRejected() {
     CHECK(b.fen() == start);
 }
 
+void test_trailingTokensRejected() {
+    chess::Board b;
+    std::string start = b.fen();
+    uint64_t startHash = b.hash();
+
+    CHECK(!b.setFen("4k3/8/8/8/8/8/8/4K3 w - - 0 1 extra"));
+    CHECK(b.fen() == start);
+    CHECK(b.hash() == startHash);
+
+    CHECK(!b.setFen("4k3/8/8/8/8/8/8/4K3 w - - 0 1 garbage"));
+    CHECK(b.fen() == start);
+}
+
 void test_validEnPassantFenRequiresCapturablePawn() {
     chess::Board b;
     CHECK(b.setFen("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"));
@@ -475,6 +488,7 @@ int main() {
     RUN_TEST(enPassantCapture);
     RUN_TEST(enPassantRequiresCapturedPawn);
     RUN_TEST(invalidFenFieldsRejected);
+    RUN_TEST(trailingTokensRejected);
     RUN_TEST(validEnPassantFenRequiresCapturablePawn);
     RUN_TEST(enPassantFenAllowsUncapturableTargetWithoutHashingIt);
     RUN_TEST(nullMoveClearsCapturableEpHash);
