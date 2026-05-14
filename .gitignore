@@ -4,3 +4,5 @@ lichess_bot_auto_logs/
 bench/chess-engine-new
 bench/latest-vs-old.pgn
 bench/latest-vs-old-config.json
+.claude/
+.remember/

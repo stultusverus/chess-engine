@@ -11,6 +11,7 @@ src/engine/               # Chess engine core
 ├── board.h/cpp           #   Bitboard board, FEN, make/unmake, Zobrist hash, incremental eval state
 ├── movegen.h/cpp         #   Check/pin-aware legal move generation (perft-verified)
 ├── eval.h/cpp            #   Tapered PeSTO eval + pawn/eval caches, mobility, king safety
+├── see.h/cpp             #   Static exchange evaluation for move ordering and pruning
 ├── search.h/cpp          #   Alpha-beta PVS + staged move picking + LMR + null move pruning
 ├── tt.h/cpp              #   4-way clustered, generation-aware TT with static eval storage (16B entries)
 ├── book.h/cpp            #   Polyglot opening book loader (.bin format, weighted random)
@@ -77,28 +78,25 @@ Run the lightweight in-repo benchmark target after building:
 ./bench_engine --json path/to/tactical.epd
 ```
 
-## Current Development Status
+## Features
 
-Recently fixed review items:
+- Magic bitboard move generation with check/pin awareness
+- Tapered evaluation with PeSTO piece-square tables, pawn structure, mobility, king safety
+- PVS alpha-beta search with iterative deepening, aspiration windows, null-move pruning, LMR
+- Staged move ordering: TT move, SEE-filtered captures, killer/countermove, history heuristic
+- 4-way clustered transposition table with generation aging and static eval storage
+- Polyglot opening book support (weighted random or deterministic)
+- UCI protocol with time management, MultiPV, WDL reporting
+- Incremental material/PST evaluation with pawn hash and eval cache
+- Deterministic make/unmake with full state rollback (hash, eval, pawn hash, repetition)
 
-- Root `searchmoves` and serial `MultiPV` no longer return moves outside the restricted root set due to TT hits.
-- Opening-book probing respects `searchmoves`, skips analysis-style searches, and validates book moves.
-- En-passant FEN and hashing are normalized so non-capturable EP targets can round-trip without splitting TT/repetition keys.
-- `Ponder` is not advertised until true ponder continuation is implemented.
-- Quiescence search uses dedicated noisy-move generation for legal captures, en-passant captures, and promotions outside check.
-- Legal move generation is check/pin-aware, and board make/unmake maintains incremental material/PST state, pawn hash, and eval-cache inputs.
-- Null-move en-passant hash removal is consistent with the old side to move.
-- The UCI `Hash` option is an allocation cap; TT entries round down to a power of two.
-- Serial `MultiPV` searches share the same time origin for time-managed searches.
-- Unsupported `go ponder` returns `bestmove 0000` with an `info string` diagnostic.
-- The transposition table uses 4-way clustered buckets with generation-aware replacement and static eval reuse.
-- Search uses a staged move picker with lazy SEE for captures: TT move, good captures/promotions, killers/countermoves, quiet history, then bad captures.
+## Roadmap
 
-High-value strength/performance work:
-
-- Automated classical eval tuning with Texel/SPSA.
-- Fixed-node/depth tactical EPD and speed benchmark suites.
-- Optional Syzygy probing, NNUE experiments, and eventually SMP/`Threads`.
+- Automated classical eval tuning (Texel/SPSA)
+- Fixed-node/depth tactical EPD and speed benchmark suites
+- Optional Syzygy endgame tablebase probing
+- NNUE evaluation experiment
+- SMP search with UCI `Threads`
 
 ## SPRT
 

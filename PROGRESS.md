@@ -59,23 +59,6 @@
 - [x] Add UCI `Book Max Ply` to configure the opening-book cutoff.
 - [x] Add UCI `Book Random` to allow deterministic highest-weight book selection.
 
-## Performance Backlog
-
-- [x] Replace pseudo-legal plus make/unmake legal generation with check/pin-aware move generation.
-- [x] Add incremental material/PST state, pawn hash, and eval cache.
-- [x] Improve search infrastructure with depth-preferred TT replacement and soft/hard time management.
-- [x] Improve search tuning with better LMR, reverse futility/razoring, continuation history, and capture history.
-- [x] Add a staged move picker: TT move, good captures/promotions, killers/countermoves, quiet history, then bad captures.
-- [x] Avoid eager SEE for every capture during full move sorting; compute SEE lazily where possible.
-- [x] Upgrade TT replacement with 2-way/4-way clustered buckets and generation/age.
-- [x] Store static evaluation in TT entries if it improves pruning/eval reuse.
-- [x] Add machine-readable JSON speed and tactical benchmark modes around fixed positions and EPD suites.
-- [x] Add optional slow perft assertions behind `CHESS_ENGINE_SLOW_TESTS`.
-- [x] Add deterministic make/unmake invariant tests comparing FEN, hash, pawn hash, eval state, and generated move legality.
-- [x] Add fixed-seed pseudo-random make/unmake invariant tests for broader generated-position coverage.
-- [x] Upgrade TT replacement to 4-way clustered buckets with depth/exact-preferred replacement.
-- [x] Add TT generation/age.
-
 ## Strategic Backlog
 
 - [ ] Optional Syzygy probing behind compile/runtime configuration.

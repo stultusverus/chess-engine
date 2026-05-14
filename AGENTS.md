@@ -61,64 +61,18 @@ clang-tidy src/**/*.cpp -- -std=c++17 -I src
 
 A C++ chess engine built from scratch (bitboard representation, alpha-beta search, UCI protocol).
 
-## Recent Review Fixes
+## Key Modules
 
-The latest correctness review fixes are now part of the codebase and should remain covered by regression tests:
-
-- Root `searchmoves` and serial `MultiPV` are protected from transposition-table root hits returning moves outside the active root set.
-- Opening-book probing is filtered by `searchmoves`, disabled for analysis-style searches, and validates book moves before returning them.
-- En-passant FEN/hash handling accepts syntactically valid EP targets while hashing EP only when an EP capture is possible.
-- `Ponder` is no longer advertised until true ponder continuation is implemented.
-- Quiescence search uses a dedicated noisy-move generator outside check instead of generating all legal moves and filtering.
-- Legal move generation is check/pin-aware.
-- Board make/unmake maintains incremental material/PST state, pawn hash, and eval-cache inputs.
-- Null-move en-passant hash removal uses the old side to move before toggling side.
-- UCI `Hash` sizing is treated as an upper bound by rounding TT entries down to a power of two.
-- Serial `MultiPV` searches use a shared time origin for time-managed searches.
-- Internal iterative deepening is restricted to deeper PV nodes.
-- Unsupported `go ponder` returns `bestmove 0000` with an `info string` diagnostic.
-- Transposition table storage uses 4-way clustered buckets with depth/exact/generation-aware replacement and static eval storage.
-- Search move ordering uses a staged picker: TT move, good captures/promotions, killers/countermoves, quiet history, then bad captures.
-
-Current high-value performance work:
-
-- Add automated eval tuning before expanding hand-tuned classical terms.
-- Extend benchmark coverage with fixed-node/depth tactical EPD and speed suites.
-
-## Opening Book
-
-The engine supports Polyglot (.bin) opening books. Use UCI setoption:
-
-```
-setoption name OwnBook value true
-setoption name Book File value books/gm2001.bin
-setoption name Book Max Ply value 10
-setoption name Book Random value true
-```
-
-## SPRT Regression Testing
-
-Compare current build against the frozen baseline for non-regression:
-
-```bash
-# Default: 10+0.1s time control, all CPU cores
-./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
-
-# Custom time control and rounds
-TC=5+0.05 ROUNDS=20000 ./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
-
-# Lower concurrency
-CONCURRENCY=4 ./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
-```
-
-Environment variables: `TC`, `ROUNDS`, `GAMES`, `SPRT`, `CONCURRENCY`, `STARTUP_MS`.
-
-## Runtime Deployment
-
-Set up a fully-configured lichess-bot deployment with a single script (uses the official lichess-bot client):
-
-```bash
-./scripts/setup-lichess-bot-runtime.sh /path/to/deployment
-```
-
-This builds the engine, clones lichess-bot, creates a Python venv, writes `config.yml`, and validates UCI startup.
+| Module | Files | Purpose |
+|--------|-------|---------|
+| Types | `types.h/cpp` | Bitboard, Square, Piece, Move, constants |
+| Attacks | `attacks.h/cpp` | Magic bitboard slider attacks, precomputed tables |
+| Board | `board.h/cpp` | Position, FEN, Zobrist hash, make/unmake, incremental eval |
+| Move Gen | `movegen.h/cpp` | Check/pin-aware legal move generation, perft |
+| Evaluation | `eval.h/cpp` | Tapered PeSTO eval, pawn structure, mobility, king safety |
+| SEE | `see.h/cpp` | Static exchange evaluation for move ordering and pruning |
+| Search | `search.h/cpp` | PVS alpha-beta, iterative deepening, quiescence, LMR, null-move |
+| TT | `tt.h/cpp` | 4-way clustered transposition table with generation aging |
+| Book | `book.h/cpp` | Polyglot opening book (weighted random or deterministic) |
+| UCI | `uci.h/cpp` | UCI protocol, time management, MultiPV, WDL |
+| Poly Keys | `poly_keys.h` | Polyglot Zobrist constants (header-only) |
