@@ -153,7 +153,7 @@ void test_probeEmptyBook() {
 void test_maxPlyCapped() {
     chess::Book book;
     book.load("../books/gm2001.bin");
-    book.setMaxPly(1); // 1 ply = 1 half-move
+    book.setMaxPly(1); // 1 ply = 2 half-moves
 
     // Startpos: 0 half-moves — should probe
     {
@@ -162,11 +162,12 @@ void test_maxPlyCapped() {
         CHECK(m.has_value());
     }
 
-    // After e2e4: 1 half-move — at the cap, should not probe
+    // After e2e4 e7e5: 2 half-moves — at the cap, should not probe
     {
         chess::Board b;
         chess::UndoInfo undo;
         b.makeMove(chess::Move(chess::E2, chess::E4), undo);
+        b.makeMove(chess::Move(chess::E7, chess::E5), undo);
         auto m = book.probe(b);
         CHECK(!m.has_value());
     }

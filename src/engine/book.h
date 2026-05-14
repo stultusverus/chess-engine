@@ -18,8 +18,8 @@ public:
     bool load(const std::string& path);
     bool isLoaded() const { return !entries_.empty(); }
 
-    void setMaxPly(int ply) { maxHalfMoves_ = ply; }
-    int maxPly() const { return maxHalfMoves_; }
+    void setMaxPly(int ply) { maxHalfMoves_ = ply * 2; }
+    int maxPly() const { return maxHalfMoves_ / 2; }
     void setRandom(bool random) { random_ = random; }
     bool random() const { return random_; }
 
@@ -36,7 +36,7 @@ private:
     };
 
     std::vector<Entry> entries_;
-    int maxHalfMoves_ = 10;
+    int maxHalfMoves_ = 20;
     bool random_ = true;
 };
 
