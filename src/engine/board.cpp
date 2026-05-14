@@ -335,6 +335,12 @@ bool Board::setFen(const std::string& fen) {
         return false;
     }
 
+    // Validate: side to move must not attack the opponent king
+    if (attacks::isSquareAttacked(*this, kingSquare(~stm_), stm_)) {
+        restoreOldState();
+        return false;
+    }
+
     posHistory_.clear();
     return true;
 }
