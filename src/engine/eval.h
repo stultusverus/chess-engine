@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include "eval_params.h"
 #include <array>
 #include <cstdint>
 
@@ -10,6 +11,7 @@ class Board;
 
 class Eval {
 public:
+    // Piece values exposed for SEE and other modules
     static constexpr int PAWN_VALUE   = 100;
     static constexpr int KNIGHT_VALUE = 320;
     static constexpr int BISHOP_VALUE = 330;
@@ -17,7 +19,6 @@ public:
     static constexpr int QUEEN_VALUE  = 900;
     static constexpr int KING_VALUE   = 20000;
 
-    // Piece value array
     static constexpr int pieceValue(PieceType pt) {
         constexpr int vals[] = {PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, KING_VALUE};
         return vals[pt];
@@ -31,6 +32,10 @@ public:
 
     // Evaluate position from white's perspective (positive = white advantage)
     int evaluate(const Board& board) const;
+
+    // Access to tunable parameters (non-const for future tuning tools)
+    EvalParams& params() { return params_; }
+    const EvalParams& params() const { return params_; }
 
 private:
     struct PawnCacheEntry {
@@ -51,6 +56,7 @@ private:
 
     mutable std::array<PawnCacheEntry, PAWN_CACHE_SIZE> pawnCache_{};
     mutable std::array<EvalCacheEntry, EVAL_CACHE_SIZE> evalCache_{};
+    EvalParams params_{};
 
     int material(const Board& board) const;
     int pieceSquare(const Board& board, int phase) const;
