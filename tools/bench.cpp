@@ -351,7 +351,9 @@ int runEpd(const std::string& path, bool json) {
     else
         std::cout << "epd solved " << solved << " total " << total
                   << " skipped " << skipped << '\n';
-    return (total == 0 && skipped == 0) ? 1 : 0;
+    if (total == 0)
+        return 1;
+    return (solved == total && skipped == 0) ? 0 : 1;
 }
 
 // --- Bench signature mode ---
