@@ -1,15 +1,52 @@
 #pragma once
 
 #include "types.h"
+#include "eval_params.h"
 #include <array>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace chess {
 
 class Board;
 
+struct EvalTrace {
+    int phase = 0;
+    int material = 0;
+    int pieceSquare = 0;
+    int pawnStructure = 0;
+    int mobility = 0;
+    int bishopPair = 0;
+    int rookFile = 0;
+    int kingSafety = 0;
+    int tempo = 0;
+    int total = 0;
+
+    struct Entry {
+        std::string name;
+        int value;
+    };
+
+    std::vector<Entry> entries() const {
+        return {
+            {"phase",        phase},
+            {"material",     material},
+            {"pieceSquare",  pieceSquare},
+            {"pawnStructure",pawnStructure},
+            {"mobility",     mobility},
+            {"bishopPair",   bishopPair},
+            {"rookFile",     rookFile},
+            {"kingSafety",   kingSafety},
+            {"tempo",        tempo},
+            {"total",        total},
+        };
+    }
+};
+
 class Eval {
 public:
+    // Piece values exposed for SEE and other modules
     static constexpr int PAWN_VALUE   = 100;
     static constexpr int KNIGHT_VALUE = 320;
     static constexpr int BISHOP_VALUE = 330;
@@ -17,7 +54,6 @@ public:
     static constexpr int QUEEN_VALUE  = 900;
     static constexpr int KING_VALUE   = 20000;
 
-    // Piece value array
     static constexpr int pieceValue(PieceType pt) {
         constexpr int vals[] = {PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, KING_VALUE};
         return vals[pt];
@@ -31,6 +67,12 @@ public:
 
     // Evaluate position from white's perspective (positive = white advantage)
     int evaluate(const Board& board) const;
+
+    // Access to tunable parameters (non-const for future tuning tools)
+    EvalParams& params() { return params_; }
+    const EvalParams& params() const { return params_; }
+    // Trace: evaluate with per-term breakdown (bypasses caches for accuracy)
+    EvalTrace trace(const Board& board) const;
 
 private:
     struct PawnCacheEntry {
@@ -51,6 +93,7 @@ private:
 
     mutable std::array<PawnCacheEntry, PAWN_CACHE_SIZE> pawnCache_{};
     mutable std::array<EvalCacheEntry, EVAL_CACHE_SIZE> evalCache_{};
+    EvalParams params_{};
 
     int material(const Board& board) const;
     int pieceSquare(const Board& board, int phase) const;

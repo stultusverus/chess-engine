@@ -16,7 +16,7 @@ jobs:
           - os: ubuntu-latest
             suffix: linux-x86_64
           - os: macos-latest
-            suffix: macos
+            suffix: macos-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -31,16 +31,50 @@ jobs:
           NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
           cmake --build build --parallel "$NPROC"
 
+      - name: Smoke test
+        run: |
+          OUTPUT="$(printf 'uci\nisready\nposition startpos\ngo depth 1\nquit\n' | ./build/chess-engine 2>/dev/null)"
+          ERRORS=0
+          echo "$OUTPUT" | grep -q 'uciok' || { echo "FAIL: missing uciok"; ERRORS=1; }
+          echo "$OUTPUT" | grep -q 'readyok' || { echo "FAIL: missing readyok"; ERRORS=1; }
+          echo "$OUTPUT" | grep -q 'bestmove' || { echo "FAIL: missing bestmove"; ERRORS=1; }
+          if [ "$ERRORS" -eq 0 ]; then
+            echo "Smoke test PASSED"
+          else
+            echo "Smoke test FAILED"
+            exit 1
+          fi
+
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
       - name: Package
-        run: tar -czf "chess-engine-${{ matrix.suffix }}.tar.gz" -C build chess-engine
+        run: |
+          mkdir -p pkg
+          cp build/chess-engine pkg/
+          cp README.md pkg/
+          if [ -f LICENSE ]; then cp LICENSE pkg/; fi
+          echo "version=${GITHUB_REF_NAME:-unknown}" > pkg/version.txt
+          echo "platform=${{ matrix.suffix }}" >> pkg/version.txt
+          echo "commit=${GITHUB_SHA}" >> pkg/version.txt
+          tar -czf "chess-engine-${{ matrix.suffix }}.tar.gz" -C pkg .
+          checksum_file="chess-engine-${{ matrix.suffix }}.tar.gz.sha256"
+          archive="chess-engine-${{ matrix.suffix }}.tar.gz"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$archive" > "$checksum_file"
+          elif command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "$archive" > "$checksum_file"
+          else
+            echo "no SHA256 tool available" >&2
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: chess-engine-${{ matrix.suffix }}
-          path: chess-engine-${{ matrix.suffix }}.tar.gz
+          path: |
+            chess-engine-${{ matrix.suffix }}.tar.gz
+            chess-engine-${{ matrix.suffix }}.tar.gz.sha256
 
   release:
     needs: build
@@ -57,5 +91,7 @@ jobs:
         with:
           files: |
             artifacts/chess-engine-linux-x86_64/chess-engine-linux-x86_64.tar.gz
-            artifacts/chess-engine-macos/chess-engine-macos.tar.gz
+            artifacts/chess-engine-linux-x86_64/chess-engine-linux-x86_64.tar.gz.sha256
+            artifacts/chess-engine-macos-arm64/chess-engine-macos-arm64.tar.gz
+            artifacts/chess-engine-macos-arm64/chess-engine-macos-arm64.tar.gz.sha256
           generate_release_notes: true
