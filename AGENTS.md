@@ -57,6 +57,10 @@ clang-tidy src/**/*.cpp -- -std=c++17 -I src
 
 - **Commit frequently.** After completing each logical unit of work (a new file, a completed module, a passing test), create a commit with a clear message.
 
+## Pull Requests
+
+- **Never merge PRs.** The user handles all merging.
+
 ## Project Goal
 
 A C++ chess engine built from scratch (bitboard representation, alpha-beta search, UCI protocol).
