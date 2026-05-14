@@ -96,6 +96,12 @@ private:
     uint64_t nodesLimit_ = 0;
     uint64_t maxNodes_ = 0;
 
+    // Time management: stability tracking
+    Move prevBestMove_{};
+    int prevScore_ = 0;
+    int stableIterations_ = 0;
+    int rootMoveCount_ = 0;
+
     // Move ordering
     static constexpr int KILLER_SCORE = 50000;
     static constexpr int COUNTER_MOVE_SCORE = 49900;

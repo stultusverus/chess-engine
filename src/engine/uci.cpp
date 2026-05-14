@@ -484,6 +484,32 @@ void UCI::handleGo(const std::string& line) {
     bool showWdl = showWdl_;
     int multiPv = multiPv_;
     pondering_.store(false);
+
+    // Reduce time for positions with only one legal move
+    if (clockManagedSearch && !moveImmediately && nodeLimit == 0 && !infinite) {
+        MoveList rootMoves;
+        MoveGenerator preGen;
+        preGen.generateLegalMoves(board_, rootMoves);
+        if (!searchMoves.empty()) {
+            MoveList filtered;
+            for (const Move& m : rootMoves) {
+                for (const Move& allowed : searchMoves) {
+                    if (allowed.from == m.from && allowed.to == m.to &&
+                        (allowed.promotion == PIECE_TYPE_NB || allowed.promotion == m.promotion)) {
+                        filtered.add(m);
+                        break;
+                    }
+                }
+            }
+            rootMoves = filtered;
+        }
+        if (rootMoves.size() == 1) {
+            softTimeMs = std::min(softTimeMs, 50);
+            hardTimeMs = std::min(hardTimeMs, 100);
+            search_.setTimeControlMs(softTimeMs, hardTimeMs);
+        }
+    }
+
     search_.setRootMoves(searchMoves);
     auto sharedSearchStart = std::chrono::steady_clock::now();
     if (multiPv <= 1) {
