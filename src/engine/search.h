@@ -101,6 +101,7 @@ private:
     int prevScore_ = 0;
     int stableIterations_ = 0;
     int rootMoveCount_ = 0;
+    int originalSoftTimeMs_ = 0;
 
     // Move ordering
     static constexpr int KILLER_SCORE = 50000;

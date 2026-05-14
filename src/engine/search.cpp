@@ -114,6 +114,7 @@ SearchResult Search::search(const Board& board, int maxDepth) {
     prevScore_ = 0;
     stableIterations_ = 0;
     rootMoveCount_ = 0;
+    originalSoftTimeMs_ = softTimeMs_;
 
     startTime_ = useStartTimeOverride_ ? startTimeOverride_ : std::chrono::steady_clock::now();
     Board rootBoard = board;
@@ -164,9 +165,11 @@ SearchResult Search::search(const Board& board, int maxDepth) {
             break;
         }
 
-        // Track PV and score stability
+        // Track PV and score stability (side-relative)
         bool pvChanged = (depth >= 2 && !sameMove(bestMoveRoot_, prevBestMove_));
-        int scoreDrop = (depth >= 2) ? (prevScore_ - result.score) : 0;
+        int sideRelScore = (rootBoard.sideToMove() == WHITE) ? result.score : -result.score;
+        int sideRelPrev = (rootBoard.sideToMove() == WHITE) ? prevScore_ : -prevScore_;
+        int scoreDrop = (depth >= 2) ? (sideRelPrev - sideRelScore) : 0;
 
         if (depth >= 2) {
             if (pvChanged) {
@@ -180,14 +183,15 @@ SearchResult Search::search(const Board& board, int maxDepth) {
 
         // Adjust soft time based on stability (clock-managed searches only)
         if (!infinite_ && hardTimeMs_ > 0 && depth >= 4) {
-            int adjustedSoft = softTimeMs_;
+            // Derive adjustment from the original soft time to avoid compounding
+            int adjustedSoft = originalSoftTimeMs_;
             // Stable position: reduce time after 2+ stable iterations
             if (stableIterations_ >= 2) {
-                adjustedSoft = softTimeMs_ * 3 / 4;
+                adjustedSoft = originalSoftTimeMs_ * 3 / 4;
             }
             // Score dropping: allocate more time
             if (scoreDrop > 50) {
-                adjustedSoft = softTimeMs_ * 3 / 2;
+                adjustedSoft = originalSoftTimeMs_ * 3 / 2;
             }
             // Respect hard cap
             adjustedSoft = std::min(adjustedSoft, hardTimeMs_);

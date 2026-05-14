@@ -461,6 +461,28 @@ void test_unknownPositionTypeDoesNotMutateBoard() {
     CHECK(contains(output, "readyok"));
 }
 
+void test_singleLegalMoveRespondsQuickly() {
+    // Use searchmoves to restrict to a single legal move;
+    // the engine should return it quickly without deep search
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "go wtime 30000 btime 30000 winc 0 binc 0 searchmoves e2e4\n",
+        "0.1");
+
+    CHECK(contains(output, "bestmove e2e4"));
+}
+
+void test_lowClockReturnsLegalMove() {
+    // Very low clock (10ms) — must still return a legal move without 0000
+    std::string output = runEngine(
+        "position startpos\n"
+        "go wtime 10 btime 10 winc 0 binc 0 movestogo 30\n"
+        "quit\n");
+
+    CHECK(contains(output, "bestmove "));
+    CHECK(!contains(output, "bestmove 0000"));
+}
+
 int main() {
     std::cout << "Running UCI tests:" << std::endl;
     RUN_TEST(rejectsInvalidCoordinates);
@@ -493,6 +515,8 @@ int main() {
     RUN_TEST(incompleteFenDoesNotReplaceCurrentPosition);
     RUN_TEST(impossibleFenOpponentKingAttackedRejected);
     RUN_TEST(unknownPositionTypeDoesNotMutateBoard);
+    RUN_TEST(singleLegalMoveRespondsQuickly);
+    RUN_TEST(lowClockReturnsLegalMove);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;
