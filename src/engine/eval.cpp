@@ -422,4 +422,23 @@ int Eval::evaluate(const Board& board) const {
     return score;
 }
 
+EvalTrace Eval::trace(const Board& board) const {
+    EvalTrace t;
+    int phase = gamePhase(board);
+    if (phase > TOTAL_PHASE) phase = TOTAL_PHASE;
+    t.phase = phase;
+    t.material = material(board);
+    t.pieceSquare = pieceSquare(board, phase);
+    t.pawnStructure = pawnStructure(board); // bypass cache for accurate trace
+    t.mobility = mobility(board, phase);
+    t.bishopPair = bishopPair(board, phase);
+    t.rookFile = rookOnFile(board, phase);
+    t.kingSafety = kingSafety(board, phase);
+    t.tempo = tempo(board);
+    t.total = t.material + t.pieceSquare + t.pawnStructure +
+              t.mobility + t.bishopPair + t.rookFile +
+              t.kingSafety + t.tempo;
+    return t;
+}
+
 } // namespace chess

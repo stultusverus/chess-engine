@@ -390,6 +390,34 @@ int runBench(bool json) {
 
 } // namespace
 
+int runEvalTrace(const std::string& fen, bool json) {
+    chess::Board board(fen);
+    chess::Eval eval;
+    chess::EvalTrace t = eval.trace(board);
+
+    if (json) {
+        std::cout << "{\n";
+        std::cout << "  \"fen\": \"" << jsonEscape(fen) << "\",\n";
+        std::cout << "  \"phase\": " << t.phase << ",\n";
+        std::cout << "  \"terms\": [\n";
+        auto entries = t.entries();
+        for (size_t i = 0; i < entries.size(); i++) {
+            std::cout << "    {\"name\": \"" << jsonEscape(entries[i].name)
+                      << "\", \"value\": " << entries[i].value << "}";
+            if (i + 1 < entries.size()) std::cout << ',';
+            std::cout << '\n';
+        }
+        std::cout << "  ]\n";
+        std::cout << "}\n";
+    } else {
+        std::cout << "fen " << fen << '\n';
+        auto entries = t.entries();
+        for (const auto& e : entries)
+            std::cout << e.name << ' ' << e.value << '\n';
+    }
+    return 0;
+}
+
 int main(int argc, char** argv) {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -397,6 +425,8 @@ int main(int argc, char** argv) {
     bool json = false;
     std::string epdPath;
     bool benchMode = false;
+    bool traceMode = false;
+    std::string traceFen;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -404,9 +434,22 @@ int main(int argc, char** argv) {
             json = true;
         } else if (arg == "bench") {
             benchMode = true;
+        } else if (arg == "trace") {
+            traceMode = true;
+            if (i + 1 < argc) {
+                traceFen = argv[++i];
+            }
         } else {
             epdPath = arg;
         }
+    }
+
+    if (traceMode) {
+        if (traceFen.empty()) {
+            std::cerr << "usage: bench_engine trace <FEN> [--json]\n";
+            return 1;
+        }
+        return runEvalTrace(traceFen, json);
     }
 
     if (benchMode)
