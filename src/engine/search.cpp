@@ -36,7 +36,8 @@ bool hasNonPawnMaterial(const Board& board, Color side) {
 
 Search::Search() {
     tt_.setSize(64);
-    scratch_.resize(MAX_PLY);
+    searchScratch_.resize(MAX_PLY);
+    qsearchScratch_.resize(MAX_PLY);
     ageHistory();
 }
 
@@ -249,7 +250,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         }
     }
 
-    NodeScratch& st = scratch_[ply];
+    NodeScratch& st = searchScratch_[ply];
     st.moves.clear();
     std::fill_n(st.used, MAX_MOVES, false);
     gen_.generateLegalMoves(board, st.moves);
@@ -279,6 +280,8 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         if (depth <= 2) {
             int margin = 300 + 100 * depth;
             if (eval + margin <= alpha) {
+                // Use quiescence from the quiescence scratch pool; searchScratch_[ply] is
+                // preserved because quiesce() operates on qsearchScratch_.
                 int qScore = quiesce(board, alpha, beta, ply);
                 if (qScore <= alpha)
                     return qScore;
@@ -523,6 +526,14 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
 
 int Search::quiesce(Board& board, int alpha, int beta, int ply) {
     if (stop_.load()) return 0;
+    if (ply >= MAX_PLY - 1) {
+        int standPat = eval_.evaluate(board);
+        if (board.sideToMove() == BLACK) standPat = -standPat;
+        if (standPat >= beta) return beta;
+        if (standPat > alpha) alpha = standPat;
+        return alpha;
+    }
+
     nodes_++;
     if (nodes_ >= nodesLimit_) {
         nodesLimit_ += 1024;
@@ -547,7 +558,7 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
         if (standPat + delta < alpha) return alpha;
     }
 
-    NodeScratch& st = scratch_[ply];
+    NodeScratch& st = qsearchScratch_[ply];
     st.moves.clear();
     std::fill_n(st.used, MAX_MOVES, false);
     if (inCheck) {

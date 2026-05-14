@@ -112,7 +112,8 @@ private:
     std::vector<Move> rootMoves_;
     std::function<void(const SearchResult&)> infoCallback_;
 
-    std::vector<NodeScratch> scratch_;
+    std::vector<NodeScratch> searchScratch_;
+    std::vector<NodeScratch> qsearchScratch_;
 
     MoveGenerator gen_;
     Eval eval_;
