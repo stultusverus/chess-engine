@@ -160,6 +160,16 @@ cmd+=("$@")
     printf 'resign=%s\n' "${resign}"
     printf 'concurrency=%s\n' "${concurrency}"
     printf 'hash_mb=%s\n' "${hash_mb}"
+    file_sha256() {
+        local path="$1"
+        if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$path" | awk '{print $1}'
+        elif command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "$path" | awk '{print $1}'
+        else
+            return 1
+        fi
+    }
     capture_metadata() {
         local label="$1"
         shift
@@ -167,9 +177,9 @@ cmd+=("$@")
         value="$("$@" 2>/dev/null)" || true
         printf '%s=%s\n' "${label}" "${value:-unavailable}"
     }
-    capture_metadata 'old_sha256' sha256sum "${old_engine}"
-    capture_metadata 'new_sha256' sha256sum "${new_engine}"
-    capture_metadata 'openings_sha256' sha256sum "${openings}"
+    capture_metadata 'old_sha256' file_sha256 "${old_engine}"
+    capture_metadata 'new_sha256' file_sha256 "${new_engine}"
+    capture_metadata 'openings_sha256' file_sha256 "${openings}"
     capture_metadata 'git_commit' git rev-parse HEAD
     capture_metadata 'os' uname -s
     capture_metadata 'kernel' uname -r
