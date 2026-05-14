@@ -33,3 +33,18 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Benchmark smoke test
+        run: |
+          BENCH_JSON="$(./build/bench_engine bench --json)"
+          echo "$BENCH_JSON" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          assert 'positions' in data, 'missing positions'
+          assert isinstance(data['positions'], list) and len(data['positions']) > 0, 'empty positions'
+          assert 'total' in data, 'missing total'
+          total = data['total']
+          assert 'nodes' in total and total['nodes'] > 0, 'missing or zero nodes'
+          assert 'signature' in total and total['signature'], 'missing signature'
+          print(f'Benchmark OK: {total[\"nodes\"]} nodes, signature {total[\"signature\"]}')
+          "
