@@ -391,7 +391,11 @@ int runBench(bool json) {
 } // namespace
 
 int runEvalTrace(const std::string& fen, bool json) {
-    chess::Board board(fen);
+    chess::Board board;
+    if (!board.setFen(fen)) {
+        std::cerr << "error: invalid FEN: " << fen << '\n';
+        return 1;
+    }
     chess::Eval eval;
     chess::EvalTrace t = eval.trace(board);
 
@@ -436,8 +440,17 @@ int main(int argc, char** argv) {
             benchMode = true;
         } else if (arg == "trace") {
             traceMode = true;
-            if (i + 1 < argc) {
-                traceFen = argv[++i];
+            // Collect remaining non-option tokens as the FEN
+            std::vector<std::string> fenParts;
+            while (i + 1 < argc) {
+                std::string next = argv[i + 1];
+                if (next == "--json" || next == "bench" || next == "trace") break;
+                fenParts.push_back(next);
+                i++;
+            }
+            for (size_t j = 0; j < fenParts.size(); j++) {
+                if (j > 0) traceFen += ' ';
+                traceFen += fenParts[j];
             }
         } else {
             epdPath = arg;
