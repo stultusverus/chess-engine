@@ -527,6 +527,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
 int Search::quiesce(Board& board, int alpha, int beta, int ply) {
     if (stop_.load()) return 0;
     if (ply >= MAX_PLY - 1) {
+        if (board.isInCheck()) return alpha;
         int standPat = eval_.evaluate(board);
         if (board.sideToMove() == BLACK) standPat = -standPat;
         if (standPat >= beta) return beta;
