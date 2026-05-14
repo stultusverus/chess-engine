@@ -158,7 +158,7 @@ bool Book::load(const std::string& path) {
 std::optional<Move> Book::probe(const Board& board) const {
     if (!isLoaded()) return std::nullopt;
 
-    // Don't use book beyond maxHalfMoves (default: 10 plies = 20 half-moves)
+    // Don't use book beyond maxHalfMoves (default: 10 plies = 10 half-moves)
     int halfMovesPlayed = 2 * (board.fullMoveNumber() - 1) + (board.sideToMove() == WHITE ? 0 : 1);
     if (halfMovesPlayed >= maxHalfMoves_)
         return std::nullopt;
