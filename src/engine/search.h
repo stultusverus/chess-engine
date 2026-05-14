@@ -27,6 +27,18 @@ struct SearchResult {
     std::vector<Move> pv;
 };
 
+struct NodeScratch {
+    MoveList moves;
+    Move quietsTried[MAX_MOVES]{};
+    Piece quietPiecesTried[MAX_MOVES]{};
+    Move capturesTried[MAX_MOVES]{};
+    Piece capturePiecesTried[MAX_MOVES]{};
+    PieceType capturedTypesTried[MAX_MOVES]{};
+    bool used[MAX_MOVES]{};
+    Move badNoisy[MAX_MOVES]{};
+    int badNoisyScores[MAX_MOVES]{};
+};
+
 class Search {
 public:
     Search();
@@ -99,6 +111,9 @@ private:
     Move bestMoveRoot_;
     std::vector<Move> rootMoves_;
     std::function<void(const SearchResult&)> infoCallback_;
+
+    std::vector<NodeScratch> searchScratch_;
+    std::vector<NodeScratch> qsearchScratch_;
 
     MoveGenerator gen_;
     Eval eval_;
