@@ -74,11 +74,23 @@ polyglot make-book -pgn games.pgn -bin mybook.bin -max-ply 20
 Run the lightweight in-repo benchmark target after building:
 
 ```bash
-./bench_engine
-./bench_engine --json
-./bench_engine path/to/tactical.epd
-./bench_engine --json path/to/tactical.epd
+./bench_engine                         # built-in perft + search benchmark
+./bench_engine --json                  # same, machine-readable JSON
+./bench_engine path/to/tactical.epd    # EPD best-move test
+./bench_engine bench                   # deterministic bench signature mode
+./bench_engine bench --json            # bench signature, JSON for CI
 ```
+
+### Bench Signature
+
+`bench_engine bench` runs fixed-depth (depth 8) searches over 15 committed FENs
+covering opening, middlegame, and endgame positions. It emits a deterministic
+FNV-64 signature over the node counts and bestmove strings of every position.
+
+- The signature depends only on nodes and bestmoves — not on elapsed time or NPS.
+- Re-running the same binary with the same configuration produces the identical
+  bestmove list and signature.
+- JSON output is machine-readable and intended for CI regression detection.
 
 ## Features
 
