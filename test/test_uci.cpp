@@ -42,6 +42,12 @@ static std::string runEngine(const std::string& input) {
     return runCommand(command);
 }
 
+static std::string runEngineStdoutOnly(const std::string& input) {
+    std::string escaped = escapeForSingleQuotedPrintf(input);
+    std::string command = "printf '" + escaped + "' | ./chess-engine 2>/dev/null";
+    return runCommand(command);
+}
+
 static std::string runEngineWithDelayedQuit(const std::string& input, const std::string& delaySeconds = "0.1") {
     std::string escaped = escapeForSingleQuotedPrintf(input);
     std::string command = "{ printf '" + escaped + "'; sleep " + delaySeconds + "; printf 'quit\\n'; } | ./chess-engine 2>&1";
@@ -257,6 +263,18 @@ void test_bookMoveRespectsSearchMoves() {
     CHECK(contains(output, "bestmove a2a3"));
 }
 
+void test_bookInfoStringEmittedOnStdout() {
+    std::string output = runEngineStdoutOnly(
+        "setoption name OwnBook value true\n"
+        "setoption name Book File value ../books/gm2001.bin\n"
+        "position startpos\n"
+        "go movetime 100\n"
+        "quit\n");
+
+    CHECK(contains(output, "info string book move"));
+    CHECK(contains(output, "bestmove "));
+}
+
 void test_bookMaxPlyZeroDisablesBook() {
     std::string output = runEngineWithDelayedQuit(
         "setoption name OwnBook value true\n"
@@ -386,6 +404,7 @@ int main() {
     RUN_TEST(goSearchMovesRestrictsRootMove);
     RUN_TEST(searchMovesRestrictionSurvivesPreviousTTHit);
     RUN_TEST(bookMoveRespectsSearchMoves);
+    RUN_TEST(bookInfoStringEmittedOnStdout);
     RUN_TEST(bookMaxPlyZeroDisablesBook);
     RUN_TEST(goPonderIsRejected);
     RUN_TEST(uciDoesNotAdvertisePonder);
