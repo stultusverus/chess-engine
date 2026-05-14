@@ -29,9 +29,13 @@ struct SearchBenchResult {
 
 struct EpdBenchResult {
     bool ok = false;
+    bool skipped = false;
+    std::string fen;
     std::string bestMove;
     std::vector<std::string> expected;
+    std::vector<std::string> avoid;
     uint64_t nodes = 0;
+    std::string skipReason;
 };
 
 struct BenchPositionResult {
@@ -90,6 +94,29 @@ std::vector<std::string> bestMovesFromEpd(const std::string& line) {
     std::string move;
     while (ss >> move)
         moves.push_back(move);
+    return moves;
+}
+
+std::vector<std::string> avoidMovesFromEpd(const std::string& line) {
+    std::vector<std::string> moves;
+    auto extract = [&](const std::string& tag) {
+        std::size_t pos = line.find(" " + tag + " ");
+        if (pos == std::string::npos)
+            pos = line.find(tag + " ");
+        if (pos == std::string::npos)
+            return;
+        std::size_t start = line.find(tag, pos);
+        if (start == std::string::npos)
+            return;
+        start += tag.size();
+        std::size_t end = line.find(';', start);
+        std::string moveList = line.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        std::istringstream ss(moveList);
+        std::string move;
+        while (ss >> move)
+            moves.push_back(move);
+    };
+    extract("am");
     return moves;
 }
 
@@ -183,20 +210,40 @@ void runBuiltInBench(bool json) {
     }
 }
 
-void printEpdJson(int solved, int total, const std::vector<EpdBenchResult>& results) {
+void printEpdJson(int solved, int total, int skipped, const std::vector<EpdBenchResult>& results) {
     std::cout << "{\n";
-    std::cout << "  \"summary\": {\"solved\": " << solved << ", \"total\": " << total << "},\n";
+    std::cout << "  \"summary\": {\"solved\": " << solved
+              << ", \"total\": " << total
+              << ", \"skipped\": " << skipped << "},\n";
     std::cout << "  \"positions\": [\n";
     for (size_t i = 0; i < results.size(); i++) {
         const EpdBenchResult& result = results[i];
-        std::cout << "    {\"ok\": " << (result.ok ? "true" : "false")
-                  << ", \"bestmove\": \"" << jsonEscape(result.bestMove)
-                  << "\", \"expected\": [";
-        for (size_t j = 0; j < result.expected.size(); j++) {
-            std::cout << "\"" << jsonEscape(result.expected[j]) << "\"";
-            if (j + 1 < result.expected.size()) std::cout << ", ";
+        std::cout << "    {\"fen\": \"" << jsonEscape(result.fen) << "\"";
+        if (result.skipped) {
+            std::cout << ", \"skipped\": true"
+                      << ", \"reason\": \"" << jsonEscape(result.skipReason) << "\"";
+        } else {
+            std::cout << ", \"ok\": " << (result.ok ? "true" : "false")
+                      << ", \"bestmove\": \"" << jsonEscape(result.bestMove) << "\"";
+            if (!result.expected.empty()) {
+                std::cout << ", \"expected\": [";
+                for (size_t j = 0; j < result.expected.size(); j++) {
+                    std::cout << "\"" << jsonEscape(result.expected[j]) << "\"";
+                    if (j + 1 < result.expected.size()) std::cout << ", ";
+                }
+                std::cout << "]";
+            }
+            if (!result.avoid.empty()) {
+                std::cout << ", \"avoid\": [";
+                for (size_t j = 0; j < result.avoid.size(); j++) {
+                    std::cout << "\"" << jsonEscape(result.avoid[j]) << "\"";
+                    if (j + 1 < result.avoid.size()) std::cout << ", ";
+                }
+                std::cout << "]";
+            }
+            std::cout << ", \"nodes\": " << result.nodes;
         }
-        std::cout << "], \"nodes\": " << result.nodes << "}";
+        std::cout << "}";
         if (i + 1 < results.size()) std::cout << ',';
         std::cout << '\n';
     }
@@ -213,42 +260,98 @@ int runEpd(const std::string& path, bool json) {
 
     int total = 0;
     int solved = 0;
+    int skipped = 0;
     std::vector<EpdBenchResult> results;
     std::string line;
+    int lineNo = 0;
     while (std::getline(file, line)) {
+        lineNo++;
         if (line.empty() || line[0] == '#')
             continue;
 
         std::string fen = firstFenFields(line);
         std::vector<std::string> bestMoves = bestMovesFromEpd(line);
-        if (fen.empty() || bestMoves.empty())
+        std::vector<std::string> avoidMoves = avoidMovesFromEpd(line);
+
+        // Malformed or unsupported: report and skip
+        if (fen.empty()) {
+            EpdBenchResult skippedResult;
+            skippedResult.skipped = true;
+            skippedResult.fen = line;
+            skippedResult.skipReason = "invalid FEN at line " + std::to_string(lineNo);
+            results.push_back(skippedResult);
+            skipped++;
+            if (!json)
+                std::cerr << "skip line " << lineNo << ": invalid FEN\n";
             continue;
+        }
+
+        if (bestMoves.empty() && avoidMoves.empty()) {
+            EpdBenchResult skippedResult;
+            skippedResult.skipped = true;
+            skippedResult.fen = fen;
+            skippedResult.skipReason = "no bm or am operation at line " + std::to_string(lineNo);
+            results.push_back(skippedResult);
+            skipped++;
+            if (!json)
+                std::cerr << "skip line " << lineNo << ": no bm or am operation\n";
+            continue;
+        }
 
         chess::Board board(fen);
         chess::Search search;
         search.setInfinite(true);
-        auto result = search.search(board, 5);
-        std::string bestMove = chess::moveToString(result.bestMove);
-        bool ok = containsMove(bestMoves, bestMove);
+        auto searchResult = search.search(board, 5);
+        std::string bestMove = chess::moveToString(searchResult.bestMove);
+
+        bool ok;
+        if (!avoidMoves.empty() && bestMoves.empty()) {
+            // am-only: pass if bestmove is NOT in the avoid list
+            ok = !containsMove(avoidMoves, bestMove);
+        } else if (!bestMoves.empty() && !avoidMoves.empty()) {
+            // both bm and am: pass if in bm list AND not in am list
+            ok = containsMove(bestMoves, bestMove) && !containsMove(avoidMoves, bestMove);
+        } else {
+            // bm-only: pass if bestmove is in the bm list
+            ok = containsMove(bestMoves, bestMove);
+        }
+
         solved += ok ? 1 : 0;
         total++;
-        results.push_back({ok, bestMove, bestMoves, result.nodes});
+
+        EpdBenchResult benchResult;
+        benchResult.ok = ok;
+        benchResult.fen = fen;
+        benchResult.bestMove = bestMove;
+        benchResult.expected = bestMoves;
+        benchResult.avoid = avoidMoves;
+        benchResult.nodes = searchResult.nodes;
+        results.push_back(benchResult);
 
         if (!json) {
             std::cout << (ok ? "ok" : "miss")
-                      << " bestmove " << bestMove
-                      << " expected";
-            for (const std::string& move : bestMoves)
-                std::cout << ' ' << move;
-            std::cout << " nodes " << result.nodes << '\n';
+                      << " fen " << fen
+                      << " bestmove " << bestMove;
+            if (!bestMoves.empty()) {
+                std::cout << " expected";
+                for (const std::string& move : bestMoves)
+                    std::cout << ' ' << move;
+            }
+            if (!avoidMoves.empty()) {
+                std::cout << " avoid";
+                for (const std::string& move : avoidMoves)
+                    std::cout << ' ' << move;
+            }
+            std::cout << " nodes " << searchResult.nodes << '\n';
         }
     }
 
     if (json)
-        printEpdJson(solved, total, results);
+        printEpdJson(solved, total, skipped, results);
     else
-        std::cout << "epd solved " << solved << " total " << total << '\n';
-    return total == 0 ? 1 : 0;
+        std::cout << "epd solved " << solved << " total " << total
+                  << " skipped " << skipped << '\n';
+    return (total == 0 && skipped == 0) ? 1 : 0;
 }
 
 // --- Bench signature mode ---
