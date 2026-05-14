@@ -36,6 +36,7 @@ bool hasNonPawnMaterial(const Board& board, Color side) {
 
 Search::Search() {
     tt_.setSize(64);
+    scratch_.resize(MAX_PLY);
     ageHistory();
 }
 
@@ -248,19 +249,21 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         }
     }
 
-    MoveList moves;
-    gen_.generateLegalMoves(board, moves);
+    NodeScratch& st = scratch_[ply];
+    st.moves.clear();
+    std::fill_n(st.used, MAX_MOVES, false);
+    gen_.generateLegalMoves(board, st.moves);
 
     if (ply == 0 && !rootMoves_.empty()) {
         MoveList filtered;
-        for (const Move& m : moves) {
+        for (const Move& m : st.moves) {
             if (rootMoveAllowed(m))
                 filtered.add(m);
         }
-        moves = filtered;
+        st.moves = filtered;
     }
 
-    if (moves.size() == 0) {
+    if (st.moves.size() == 0) {
         return inCheck ? -MATE + ply : 0;
     }
 
@@ -286,16 +289,8 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     int bestScore = -INF;
     int movesMade = 0;
     Move bestMoveInNode;
-    Move quietsTried[MAX_MOVES]{};
-    Piece quietPiecesTried[MAX_MOVES]{};
     int quietsTriedCount = 0;
-    Move capturesTried[MAX_MOVES]{};
-    Piece capturePiecesTried[MAX_MOVES]{};
-    PieceType capturedTypesTried[MAX_MOVES]{};
     int capturesTriedCount = 0;
-    bool used[MAX_MOVES]{};
-    Move badNoisy[MAX_MOVES]{};
-    int badNoisyScores[MAX_MOVES]{};
     int badNoisyCount = 0;
     int badNoisyIndex = 0;
     int stage = 0;
@@ -303,17 +298,17 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     auto selectBestIndex = [&](auto predicate, auto scoreFor) {
         int best = -1;
         int bestScore = -INF;
-        for (int i = 0; i < moves.size(); i++) {
-            if (used[i] || !predicate(moves[i]))
+        for (int i = 0; i < st.moves.size(); i++) {
+            if (st.used[i] || !predicate(st.moves[i]))
                 continue;
-            int score = scoreFor(moves[i]);
+            int score = scoreFor(st.moves[i]);
             if (best == -1 || score > bestScore) {
                 best = i;
                 bestScore = score;
             }
         }
         if (best != -1)
-            used[best] = true;
+            st.used[best] = true;
         return best;
     };
 
@@ -327,10 +322,10 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                 stage++;
                 if (ttMove.from == SQ_NONE)
                     continue;
-                for (int i = 0; i < moves.size(); i++) {
-                    if (!used[i] && sameMove(moves[i], ttMove)) {
-                        used[i] = true;
-                        m = moves[i];
+                for (int i = 0; i < st.moves.size(); i++) {
+                    if (!st.used[i] && sameMove(st.moves[i], ttMove)) {
+                        st.used[i] = true;
+                        m = st.moves[i];
                         moveOrderingScore = isQuietHistoryMove(m) ? quietMoveScore(board, m, ply) : 0;
                         haveMove = true;
                         break;
@@ -345,14 +340,14 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                     continue;
                 }
 
-                Move candidate = moves[idx];
+                Move candidate = st.moves[idx];
                 if (isCaptureMove(candidate)) {
                     int see = staticExchangeEval(board, candidate);
                     int score = noisyMoveScore(board, candidate, see);
                     if (see < 0) {
                         if (badNoisyCount < MAX_MOVES) {
-                            badNoisy[badNoisyCount] = candidate;
-                            badNoisyScores[badNoisyCount] = score;
+                            st.badNoisy[badNoisyCount] = candidate;
+                            st.badNoisyScores[badNoisyCount] = score;
                             badNoisyCount++;
                         }
                         continue;
@@ -374,7 +369,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                     stage++;
                     continue;
                 }
-                m = moves[idx];
+                m = st.moves[idx];
                 moveOrderingScore = quietMoveScore(board, m, ply);
                 haveMove = true;
             } else if (stage == 3) {
@@ -385,7 +380,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                     stage++;
                     continue;
                 }
-                m = moves[idx];
+                m = st.moves[idx];
                 moveOrderingScore = quietMoveScore(board, m, ply);
                 haveMove = true;
             } else if (stage == 4) {
@@ -395,13 +390,13 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                 }
                 int best = badNoisyIndex;
                 for (int i = badNoisyIndex + 1; i < badNoisyCount; i++) {
-                    if (badNoisyScores[i] > badNoisyScores[best])
+                    if (st.badNoisyScores[i] > st.badNoisyScores[best])
                         best = i;
                 }
-                std::swap(badNoisy[badNoisyIndex], badNoisy[best]);
-                std::swap(badNoisyScores[badNoisyIndex], badNoisyScores[best]);
-                m = badNoisy[badNoisyIndex];
-                moveOrderingScore = badNoisyScores[badNoisyIndex];
+                std::swap(st.badNoisy[badNoisyIndex], st.badNoisy[best]);
+                std::swap(st.badNoisyScores[badNoisyIndex], st.badNoisyScores[best]);
+                m = st.badNoisy[badNoisyIndex];
+                moveOrderingScore = st.badNoisyScores[badNoisyIndex];
                 badNoisyIndex++;
                 haveMove = true;
             } else {
@@ -428,16 +423,16 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         if (isQuietHistoryMove(m)) {
             setContinuationContext(ply + 1, movedPiece, m);
             if (quietsTriedCount < MAX_MOVES) {
-                quietsTried[quietsTriedCount] = m;
-                quietPiecesTried[quietsTriedCount] = movedPiece;
+                st.quietsTried[quietsTriedCount] = m;
+                st.quietPiecesTried[quietsTriedCount] = movedPiece;
                 quietsTriedCount++;
             }
         } else {
             clearContinuationContext(ply + 1);
             if (isCaptureMove(m) && capturedType != PIECE_TYPE_NB && capturesTriedCount < MAX_MOVES) {
-                capturesTried[capturesTriedCount] = m;
-                capturePiecesTried[capturesTriedCount] = movedPiece;
-                capturedTypesTried[capturesTriedCount] = capturedType;
+                st.capturesTried[capturesTriedCount] = m;
+                st.capturePiecesTried[capturesTriedCount] = movedPiece;
+                st.capturedTypesTried[capturesTriedCount] = capturedType;
                 capturesTriedCount++;
             }
         }
@@ -487,15 +482,15 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                         updateCounterMove(m, ply);
                         updateQuietHistory(m, movedPiece, depth, ply, 1);
                         for (int i = 0; i < quietsTriedCount; i++) {
-                            if (!sameMove(quietsTried[i], m))
-                                updateQuietHistory(quietsTried[i], quietPiecesTried[i], depth, ply, -1);
+                            if (!sameMove(st.quietsTried[i], m))
+                                updateQuietHistory(st.quietsTried[i], st.quietPiecesTried[i], depth, ply, -1);
                         }
                     } else if (isCaptureMove(m) && capturedType != PIECE_TYPE_NB) {
                         updateCaptureHistory(m, movedPiece, capturedType, depth, 1);
                         for (int i = 0; i < capturesTriedCount; i++) {
-                            if (!sameMove(capturesTried[i], m)) {
-                                updateCaptureHistory(capturesTried[i], capturePiecesTried[i],
-                                                     capturedTypesTried[i], depth, -1);
+                            if (!sameMove(st.capturesTried[i], m)) {
+                                updateCaptureHistory(st.capturesTried[i], st.capturePiecesTried[i],
+                                                     st.capturedTypesTried[i], depth, -1);
                             }
                         }
                     }
@@ -552,28 +547,29 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
         if (standPat + delta < alpha) return alpha;
     }
 
-    MoveList searchMoves;
+    NodeScratch& st = scratch_[ply];
+    st.moves.clear();
+    std::fill_n(st.used, MAX_MOVES, false);
     if (inCheck) {
-        gen_.generateLegalMoves(board, searchMoves);
+        gen_.generateLegalMoves(board, st.moves);
     } else {
-        gen_.generateLegalNoisyMoves(board, searchMoves);
+        gen_.generateLegalNoisyMoves(board, st.moves);
     }
 
-    if (searchMoves.size() == 0) {
+    if (st.moves.size() == 0) {
         if (inCheck) return -MATE + ply;
         return gen_.hasLegalMove(board) ? alpha : 0;
     }
 
-    bool used[MAX_MOVES]{};
     while (true) {
         int best = -1;
         int bestScore = -INF;
-        for (int i = 0; i < searchMoves.size(); i++) {
-            if (used[i])
+        for (int i = 0; i < st.moves.size(); i++) {
+            if (st.used[i])
                 continue;
-            int score = isNoisyOrPromotion(searchMoves[i])
-                ? noisyMovePreScore(board, searchMoves[i])
-                : quietMoveScore(board, searchMoves[i], ply);
+            int score = isNoisyOrPromotion(st.moves[i])
+                ? noisyMovePreScore(board, st.moves[i])
+                : quietMoveScore(board, st.moves[i], ply);
             if (best == -1 || score > bestScore) {
                 best = i;
                 bestScore = score;
@@ -582,8 +578,8 @@ int Search::quiesce(Board& board, int alpha, int beta, int ply) {
         if (best == -1)
             break;
 
-        used[best] = true;
-        Move m = searchMoves[best];
+        st.used[best] = true;
+        Move m = st.moves[best];
 
         // Static exchange evaluation (SEE): skip captures that lose material by force.
         if (isCaptureMove(m) && !inCheck && staticExchangeEval(board, m) < 0)
