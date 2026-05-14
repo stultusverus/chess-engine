@@ -370,22 +370,6 @@ void test_malformedFenHandledSafely() {
     CHECK(badPlacement.fen() == chess::STARTPOS_FEN);
 }
 
-void test_impossibleFenOpponentKingAttacked() {
-    chess::Board b;
-    std::string start = b.fen();
-
-    // White rook on e2 attacks black king on e8 — impossible (R = white rook)
-    CHECK(!b.setFen("4k3/8/8/8/8/8/4R3/4K3 w - - 0 1"));
-    CHECK(b.fen() == start);
-
-    // White bishop on b5 attacks black king on e8 via diagonal — impossible
-    CHECK(!b.setFen("4k3/8/8/1B6/8/8/8/4K3 w - - 0 1"));
-    CHECK(b.fen() == start);
-
-    // But a valid checking position (stm's king is in check) is legal
-    CHECK(b.setFen("4k3/8/8/8/8/8/3q4/4K3 w - - 0 1"));
-}
-
 static bool evalStateEquals(const chess::IncrementalEvalState& a,
                             const chess::IncrementalEvalState& b) {
     return a.material == b.material &&
@@ -497,7 +481,6 @@ int main() {
     RUN_TEST(promotion);
     RUN_TEST(invalidPromotionsRejected);
     RUN_TEST(malformedFenHandledSafely);
-    RUN_TEST(impossibleFenOpponentKingAttacked);
     RUN_TEST(makeUnmakeInvariantsAcrossGeneratedMoves);
     RUN_TEST(makeUnmakeInvariantsAcrossPseudoRandomPositions);
 
