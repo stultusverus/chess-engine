@@ -211,6 +211,44 @@ void test_goRejectsMalformedNumericValues() {
     CHECK(contains(output, "bestmove "));
 }
 
+void test_goNodesSmallValueAccepted() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "go nodes 1\n",
+        "0.2");
+
+    CHECK(contains(output, "bestmove "));
+    CHECK(!contains(output, "[uci] illegal go nodes"));
+}
+
+void test_goNodesLargeValueAccepted() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "go nodes 5000000000\n",
+        "0.2");
+
+    CHECK(contains(output, "bestmove "));
+    CHECK(!contains(output, "[uci] illegal go nodes"));
+}
+
+void test_goNodesNegativeRejected() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "go nodes -1\n",
+        "0.2");
+
+    CHECK(contains(output, "[uci] illegal go nodes: -1"));
+}
+
+void test_goNodesMalformedRejected() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "go nodes abc\n",
+        "0.2");
+
+    CHECK(contains(output, "[uci] illegal go nodes: abc"));
+}
+
 void test_goNodesStopsAndReportsInfo() {
     std::string output = runEngineWithDelayedQuit(
         "position startpos\n"
@@ -382,6 +420,10 @@ int main() {
     RUN_TEST(mateScoresUseUciMateFormat);
     RUN_TEST(repetitionIsScoredAsDraw);
     RUN_TEST(goRejectsMalformedNumericValues);
+    RUN_TEST(goNodesSmallValueAccepted);
+    RUN_TEST(goNodesLargeValueAccepted);
+    RUN_TEST(goNodesNegativeRejected);
+    RUN_TEST(goNodesMalformedRejected);
     RUN_TEST(goNodesStopsAndReportsInfo);
     RUN_TEST(goSearchMovesRestrictsRootMove);
     RUN_TEST(searchMovesRestrictionSurvivesPreviousTTHit);

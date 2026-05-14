@@ -41,6 +41,22 @@ std::optional<int> parseInt(const std::string& value) {
     return static_cast<int>(parsed);
 }
 
+std::optional<uint64_t> parseUint64(const std::string& value) {
+    if (value.empty()) return std::nullopt;
+
+    // Reject leading sign
+    if (value[0] == '-' || value[0] == '+')
+        return std::nullopt;
+
+    char* end = nullptr;
+    errno = 0;
+    unsigned long long parsed = std::strtoull(value.c_str(), &end, 10);
+    if (errno != 0 || end == value.c_str() || *end != '\0')
+        return std::nullopt;
+
+    return static_cast<uint64_t>(parsed);
+}
+
 std::optional<bool> parseBool(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -298,12 +314,12 @@ void UCI::handleGo(const std::string& line) {
             std::cerr << "[uci] illegal go " << name << ": missing value" << std::endl;
             return;
         }
-        auto value = parseInt(tokens[++i]);
-        if (!value || *value < 0) {
+        auto value = parseUint64(tokens[++i]);
+        if (!value) {
             std::cerr << "[uci] illegal go " << name << ": " << tokens[i] << std::endl;
             return;
         }
-        target = static_cast<uint64_t>(*value);
+        target = *value;
     };
 
     for (size_t i = 0; i < tokens.size(); i++) {
