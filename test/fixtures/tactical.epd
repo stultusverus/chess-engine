@@ -1,0 +1,15 @@
+# Tactical EPD test fixture for bench_engine
+# bm = best moves, am = avoid moves
+# Positions selected for reliable detection at depth 5
+
+# Scholar's mate: Qxf7#
+r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1 bm h5f7;
+
+# Capturing a hanging queen
+rnb1kbnr/pppp1ppp/8/4p3/4P2q/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1 bm f3h4;
+
+# Avoid the early queen sortie (am-only)
+rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1 am d1h5;
+
+# Both bm and am: recapture the knight but avoid dxc6
+r1bqkb1r/pppp1ppp/2N2n2/4p3/2B1P3/8/PPPP1PPP/RNBQK2R b KQkq - 0 1 bm b7c6 d7c6; am d7d5;
