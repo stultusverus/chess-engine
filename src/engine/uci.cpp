@@ -461,7 +461,7 @@ void UCI::handleGo(const std::string& line) {
             }
         }
         if (bookMove) {
-            std::cout << "info string book move" << std::endl;
+            std::cerr << "info string book move" << std::endl;
             std::cout << "bestmove " << moveToString(*bookMove) << std::endl;
             return;
         }
