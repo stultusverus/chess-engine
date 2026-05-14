@@ -4,10 +4,45 @@
 #include "eval_params.h"
 #include <array>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace chess {
 
 class Board;
+
+struct EvalTrace {
+    int phase = 0;
+    int material = 0;
+    int pieceSquare = 0;
+    int pawnStructure = 0;
+    int mobility = 0;
+    int bishopPair = 0;
+    int rookFile = 0;
+    int kingSafety = 0;
+    int tempo = 0;
+    int total = 0;
+
+    struct Entry {
+        std::string name;
+        int value;
+    };
+
+    std::vector<Entry> entries() const {
+        return {
+            {"phase",        phase},
+            {"material",     material},
+            {"pieceSquare",  pieceSquare},
+            {"pawnStructure",pawnStructure},
+            {"mobility",     mobility},
+            {"bishopPair",   bishopPair},
+            {"rookFile",     rookFile},
+            {"kingSafety",   kingSafety},
+            {"tempo",        tempo},
+            {"total",        total},
+        };
+    }
+};
 
 class Eval {
 public:
@@ -36,6 +71,8 @@ public:
     // Access to tunable parameters (non-const for future tuning tools)
     EvalParams& params() { return params_; }
     const EvalParams& params() const { return params_; }
+    // Trace: evaluate with per-term breakdown (bypasses caches for accuracy)
+    EvalTrace trace(const Board& board) const;
 
 private:
     struct PawnCacheEntry {

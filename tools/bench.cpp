@@ -390,6 +390,38 @@ int runBench(bool json) {
 
 } // namespace
 
+int runEvalTrace(const std::string& fen, bool json) {
+    chess::Board board;
+    if (!board.setFen(fen)) {
+        std::cerr << "error: invalid FEN: " << fen << '\n';
+        return 1;
+    }
+    chess::Eval eval;
+    chess::EvalTrace t = eval.trace(board);
+
+    if (json) {
+        std::cout << "{\n";
+        std::cout << "  \"fen\": \"" << jsonEscape(fen) << "\",\n";
+        std::cout << "  \"phase\": " << t.phase << ",\n";
+        std::cout << "  \"terms\": [\n";
+        auto entries = t.entries();
+        for (size_t i = 0; i < entries.size(); i++) {
+            std::cout << "    {\"name\": \"" << jsonEscape(entries[i].name)
+                      << "\", \"value\": " << entries[i].value << "}";
+            if (i + 1 < entries.size()) std::cout << ',';
+            std::cout << '\n';
+        }
+        std::cout << "  ]\n";
+        std::cout << "}\n";
+    } else {
+        std::cout << "fen " << fen << '\n';
+        auto entries = t.entries();
+        for (const auto& e : entries)
+            std::cout << e.name << ' ' << e.value << '\n';
+    }
+    return 0;
+}
+
 int main(int argc, char** argv) {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -397,6 +429,8 @@ int main(int argc, char** argv) {
     bool json = false;
     std::string epdPath;
     bool benchMode = false;
+    bool traceMode = false;
+    std::string traceFen;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -404,9 +438,31 @@ int main(int argc, char** argv) {
             json = true;
         } else if (arg == "bench") {
             benchMode = true;
+        } else if (arg == "trace") {
+            traceMode = true;
+            // Collect remaining non-option tokens as the FEN
+            std::vector<std::string> fenParts;
+            while (i + 1 < argc) {
+                std::string next = argv[i + 1];
+                if (next == "--json" || next == "bench" || next == "trace") break;
+                fenParts.push_back(next);
+                i++;
+            }
+            for (size_t j = 0; j < fenParts.size(); j++) {
+                if (j > 0) traceFen += ' ';
+                traceFen += fenParts[j];
+            }
         } else {
             epdPath = arg;
         }
+    }
+
+    if (traceMode) {
+        if (traceFen.empty()) {
+            std::cerr << "usage: bench_engine trace <FEN> [--json]\n";
+            return 1;
+        }
+        return runEvalTrace(traceFen, json);
     }
 
     if (benchMode)

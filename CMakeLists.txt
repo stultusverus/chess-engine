@@ -93,3 +93,6 @@ add_test(NAME book COMMAND test_book)
 add_executable(test_uci test/test_uci.cpp)
 add_dependencies(test_uci chess-engine)
 add_test(NAME uci COMMAND test_uci)
+
+# Eval trace smoke test
+add_test(NAME eval_trace COMMAND bench_engine trace rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 --json)
