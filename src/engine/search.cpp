@@ -117,10 +117,11 @@ SearchResult Search::search(const Board& board, int maxDepth) {
         if (stop_.load() && depth > 1) break;
         int alpha = -INF;
         int beta = INF;
+        int aspDelta = 30;
 
         if (depth >= 4) {
-            alpha = result.score - 30;
-            beta = result.score + 30;
+            alpha = result.score - aspDelta;
+            beta = result.score + aspDelta;
         }
 
         bool research = false;
@@ -129,10 +130,22 @@ SearchResult Search::search(const Board& board, int maxDepth) {
             if (stop_.load()) break;
 
             if (score <= alpha) {
-                alpha = -INF;
+                // Staged fail-low widening
+                if (alpha > -MATE + MAX_PLY) {
+                    aspDelta *= 2;
+                    alpha = std::max(alpha - aspDelta, -INF);
+                } else {
+                    alpha = -INF;
+                }
                 research = true;
             } else if (score >= beta) {
-                beta = INF;
+                // Staged fail-high widening
+                if (beta < MATE - MAX_PLY) {
+                    aspDelta *= 2;
+                    beta = std::min(beta + aspDelta, INF);
+                } else {
+                    beta = INF;
+                }
                 research = true;
             } else {
                 research = false;
