@@ -54,6 +54,8 @@ The engine supports Polyglot (.bin) opening books. Use UCI setoption:
 setoption name OwnBook value true
 setoption name Book File value books/gm2001.bin
 setoption name Book Max Ply value 10
+# Book Max Ply limits book probing to the first N half-moves (plies).
+# 0 disables the book; 1 allows only the root position.
 setoption name Book Random value true
 ```
 
