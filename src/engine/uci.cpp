@@ -242,13 +242,6 @@ void UCI::handlePosition(const std::string& line) {
             std::cerr << "[uci] illegal fen: " << fen << std::endl;
             return;
         }
-
-        // Reject trailing tokens between fen data and "moves"
-        std::string trailer;
-        if (ss >> trailer && trailer != "moves") {
-            std::cerr << "[uci] illegal fen: " << fen << std::endl;
-            return;
-        }
     } else {
         std::cerr << "[uci] illegal position: " << posType << std::endl;
         return;
