@@ -149,6 +149,15 @@ bool Board::setFen(const std::string& fen) {
         return false;
     }
 
+    // Reject trailing tokens
+    {
+        std::string extra;
+        if (ss >> extra) {
+            restoreOldState();
+            return false;
+        }
+    }
+
     // Piece placement
     Square sq = A8;
     int file = 0;
