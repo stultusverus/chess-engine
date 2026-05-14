@@ -319,6 +319,17 @@ void test_goPonderIsRejected() {
     CHECK(contains(output, "bestmove 0000"));
 }
 
+void test_clearHashOptionAdvertisedAndAccepted() {
+    std::string output = runEngine(
+        "uci\n"
+        "setoption name Clear Hash\n"
+        "isready\n"
+        "quit\n");
+
+    CHECK(contains(output, "option name Clear Hash type button"));
+    CHECK(contains(output, "readyok"));
+}
+
 void test_uciDoesNotAdvertisePonder() {
     std::string output = runEngine("uci\nquit\n");
     CHECK(contains(output, "id name ChessEngine "));
@@ -452,6 +463,7 @@ int main() {
     RUN_TEST(bookMoveRespectsSearchMoves);
     RUN_TEST(bookMaxPlyZeroDisablesBook);
     RUN_TEST(goPonderIsRejected);
+    RUN_TEST(clearHashOptionAdvertisedAndAccepted);
     RUN_TEST(uciDoesNotAdvertisePonder);
     RUN_TEST(lowClockKeepsInternalMoveOverhead);
     RUN_TEST(movetimeIgnoresMoveOverhead);
