@@ -371,6 +371,17 @@ void test_incompleteFenDoesNotReplaceCurrentPosition() {
     CHECK(!contains(output, "bestmove 0000"));
 }
 
+void test_impossibleFenOpponentKingAttackedRejected() {
+    std::string output = runEngine(
+        "position startpos\n"
+        "position fen 4k3/8/8/8/8/8/4R3/4K3 w - - 0 1\n"
+        "go depth 1\n"
+        "quit\n");
+
+    CHECK(contains(output, "[uci] illegal fen:"));
+    CHECK(contains(output, "bestmove "));
+}
+
 void test_unknownPositionTypeDoesNotMutateBoard() {
     std::string output = runEngine(
         "position startpos\n"
@@ -407,6 +418,7 @@ int main() {
     RUN_TEST(invalidFenDoesNotReplaceCurrentPosition);
     RUN_TEST(fenTrailingTokensRejected);
     RUN_TEST(incompleteFenDoesNotReplaceCurrentPosition);
+    RUN_TEST(impossibleFenOpponentKingAttackedRejected);
     RUN_TEST(unknownPositionTypeDoesNotMutateBoard);
 
     if (failures > 0) {
