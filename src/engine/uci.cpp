@@ -185,7 +185,6 @@ void UCI::handleUci() {
     std::cout << "option name Book Max Ply type spin default 10 min 0 max 200" << std::endl;
     std::cout << "option name Book Random type check default true" << std::endl;
     std::cout << "option name UCI_ShowWDL type check default false" << std::endl;
-    std::cout << "option name Clear Hash type button" << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -618,9 +617,6 @@ void UCI::handleSetOption(const std::string& line) {
         if (auto enabled = parseBool(value)) {
             showWdl_ = *enabled;
         }
-    } else if (name == "Clear Hash") {
-        stopSearch();
-        search_.clearTT();
     }
 }
 
