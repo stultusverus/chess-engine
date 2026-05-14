@@ -160,6 +160,24 @@ cmd+=("$@")
     printf 'resign=%s\n' "${resign}"
     printf 'concurrency=%s\n' "${concurrency}"
     printf 'hash_mb=%s\n' "${hash_mb}"
+    capture_metadata() {
+        local label="$1"
+        shift
+        local value
+        value="$("$@" 2>/dev/null)" || true
+        printf '%s=%s\n' "${label}" "${value:-unavailable}"
+    }
+    capture_metadata 'old_sha256' sha256sum "${old_engine}"
+    capture_metadata 'new_sha256' sha256sum "${new_engine}"
+    capture_metadata 'openings_sha256' sha256sum "${openings}"
+    capture_metadata 'git_commit' git rev-parse HEAD
+    capture_metadata 'os' uname -s
+    capture_metadata 'kernel' uname -r
+    capture_metadata 'arch' uname -m
+    capture_metadata 'cpu_model' sh -c 'sysctl -n machdep.cpu.brand_string 2>/dev/null || grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs'
+    capture_metadata 'fastchess_version' fastchess --version
+    printf 'old_engine_uci_id=%s\n' "$(printf 'uci\nquit\n' | "${old_engine}" 2>/dev/null | grep -m1 '^id name' || echo unavailable)"
+    printf 'new_engine_uci_id=%s\n' "$(printf 'uci\nquit\n' | "${new_engine}" 2>/dev/null | grep -m1 '^id name' || echo unavailable)"
 } > "${metadata_file}"
 
 {
