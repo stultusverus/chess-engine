@@ -300,7 +300,10 @@ static uint64_t fnv64(const uint8_t* data, size_t len, uint64_t hash) {
 static uint64_t computeBenchSignature(const std::vector<BenchPositionResult>& results) {
     uint64_t hash = 14695981039346656037ULL; // FNV-64 offset basis
     for (const auto& r : results) {
-        hash = fnv64(reinterpret_cast<const uint8_t*>(&r.nodes), sizeof(r.nodes), hash);
+        // Hash decimal text of nodes (endian-independent) + bestmove string.
+        // timeMs and NPS are excluded — they vary across runs.
+        std::string nodeStr = std::to_string(r.nodes);
+        hash = fnv64(reinterpret_cast<const uint8_t*>(nodeStr.data()), nodeStr.size(), hash);
         hash = fnv64(reinterpret_cast<const uint8_t*>(r.bestMove.data()), r.bestMove.size(), hash);
     }
     return hash;
