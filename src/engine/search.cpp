@@ -162,13 +162,6 @@ SearchResult Search::search(const Board& board, int maxDepth) {
 
         // --- Time management: stability-based adjustments ---
 
-        // If only one legal move, stop after verifying it (depth 2)
-        if (depth >= 2 && rootMoveCount_ <= 1) {
-            if (infoCallback_)
-                infoCallback_(result);
-            break;
-        }
-
         // Track PV and score stability (side-relative)
         bool pvChanged = (depth >= 2 && !sameMove(bestMoveRoot_, prevBestMove_));
         int sideRelScore = (rootBoard.sideToMove() == WHITE) ? result.score : -result.score;

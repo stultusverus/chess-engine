@@ -485,7 +485,8 @@ void UCI::handleGo(const std::string& line) {
     int multiPv = multiPv_;
     pondering_.store(false);
 
-    // Reduce time for positions with only one legal move
+    // When the allowed root move set has exactly one legal move there is
+    // no search decision to make — return it immediately.
     if (clockManagedSearch && !moveImmediately && nodeLimit == 0 && !infinite) {
         MoveList rootMoves;
         MoveGenerator preGen;
@@ -504,9 +505,8 @@ void UCI::handleGo(const std::string& line) {
             rootMoves = filtered;
         }
         if (rootMoves.size() == 1) {
-            softTimeMs = std::min(softTimeMs, 100);
-            hardTimeMs = std::min(hardTimeMs, 200);
-            search_.setTimeControlMs(softTimeMs, hardTimeMs);
+            std::cout << "bestmove " << moveToString(rootMoves[0]) << std::endl;
+            return;
         }
     }
 
@@ -566,13 +566,10 @@ void UCI::handleGo(const std::string& line) {
             }
             search_.clearTimeStartOverride();
         }
-        if (!hasRootMoves && (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE)) {
-            MoveList moves;
-            MoveGenerator gen;
-            gen.generateMoves(searchBoard, moves);
-            if (moves.size() > 0) {
-                result.bestMove = moves[0];
-            }
+        if (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE) {
+            auto fallback = firstAllowedLegalMove(searchBoard, searchMoves);
+            if (fallback)
+                result.bestMove = *fallback;
         }
 
         if (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE) {
