@@ -396,11 +396,15 @@ void test_multiPvReportsMultipleLines() {
 }
 
 void test_multiPvClockManagedSearch() {
+    // Use a depth-bounded clock-managed search so the search completes
+    // deterministically.  The small pipe-delay (0.2 s) is only there to
+    // let the search thread start before quit arrives; depth 1 ensures
+    // both PV lines finish in milliseconds regardless of sanitizers.
     std::string output = runEngineWithDelayedQuit(
         "setoption name MultiPV value 2\n"
         "position startpos\n"
-        "go wtime 30000 btime 30000 winc 0 binc 0\n",
-        "2.0");
+        "go wtime 30000 btime 30000 winc 0 binc 0 depth 1\n",
+        "0.2");
 
     CHECK(contains(output, "multipv 1"));
     CHECK(contains(output, "multipv 2"));
