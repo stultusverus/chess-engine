@@ -92,6 +92,41 @@ FNV-64 signature over the node counts and bestmove strings of every position.
   bestmove list and signature.
 - JSON output is machine-readable and intended for CI regression detection.
 
+### Tuning Scaffold
+
+`bench_engine tune-eval` provides a minimal Texel tuning scaffold for offline
+evaluation parameter tuning. It reads a dataset of positions and game results,
+computes a baseline mean-squared-error loss, and performs a lightweight
+K-parameter optimisation as a proof of concept.
+
+```bash
+./bench_engine tune-eval path/to/dataset.txt       # human-readable report
+./bench_engine tune-eval path/to/dataset.txt --json # machine-readable JSON
+```
+
+#### Dataset Format
+
+One position per line in `<fen> <result>` format:
+
+```text
+rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 1/2-1/2
+8/8/8/4k3/4P3/4K3/8/8 w - - 0 1 1-0
+8/8/8/4k3/4p3/4K3/8/8 w - - 0 1 0-1
+```
+
+Results must be `1-0` (white win), `1/2-1/2` (draw), or `0-1` (black win).
+Leading/trailing whitespace is trimmed. Blank lines and lines starting with
+`#` are ignored. Malformed lines are reported as warnings and skipped.
+
+The committed fixture at `test/fixtures/tune-small.txt` is a smoke-test dataset
+for validating the scaffold, not a real tuning corpus. Real tuning requires a
+larger dataset of quiet positions from actual games.
+
+The scaffold does **not** change engine evaluation parameters. It reports
+baseline loss (K=1.0) and the best K found via golden-section search. All
+output is deterministic for a fixed dataset. Future work may extend this to
+multi-parameter Texel or SPSA tuning with separate review and SPRT.
+
 ## Features
 
 - Magic bitboard move generation with check/pin awareness
