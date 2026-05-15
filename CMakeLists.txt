@@ -51,6 +51,8 @@ add_library(engine STATIC
     src/engine/book.cpp
     src/engine/uci.h
     src/engine/uci.cpp
+    src/engine/tune.h
+    src/engine/tune.cpp
 )
 
 target_include_directories(engine PUBLIC src)
@@ -94,7 +96,14 @@ add_executable(test_uci test/test_uci.cpp)
 add_dependencies(test_uci chess-engine)
 add_test(NAME uci COMMAND test_uci)
 
+add_executable(test_tune test/test_tune.cpp)
+target_link_libraries(test_tune PRIVATE engine)
+add_test(NAME tune COMMAND test_tune)
+
 # EPD tactical fixture smoke test
 add_test(NAME epd_fixture COMMAND bench_engine ${CMAKE_SOURCE_DIR}/test/fixtures/tactical.epd)
 # Eval trace smoke test
 add_test(NAME eval_trace COMMAND bench_engine trace rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 --json)
+
+# Tune-eval fixture smoke test
+add_test(NAME tune_fixture COMMAND bench_engine tune-eval ${CMAKE_SOURCE_DIR}/test/fixtures/tune-small.txt --json)

@@ -1,0 +1,35 @@
+# Small tuning fixture dataset for smoke-testing the Texel tuning scaffold.
+# Each non-comment line: <fen> <result>
+# Result: 1-0 (white win), 1/2-1/2 (draw), 0-1 (black win)
+#
+# Mix of opening, middlegame, and endgame positions.
+
+# Start position — balanced
+rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 1/2-1/2
+
+# After 1.e4 e5 2.Nf3 Nc6 3.Bc4 — slight white edge
+r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3 1-0
+
+# Queen's Gambit after 1.d4 d5 2.c4 — balanced
+rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2 1/2-1/2
+
+# Italian middlegame — white has spatial advantage
+r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 0 6 1-0
+
+# White up a pawn in K+P endgame
+8/8/8/4k3/4P3/4K3/8/8 w - - 0 1 1-0
+
+# Black up a pawn in K+P endgame
+8/8/8/4k3/4p3/4K3/8/8 w - - 0 1 0-1
+
+# Kings only — dead draw
+8/8/8/4k3/8/8/4K3/8 w - - 0 1 1/2-1/2
+
+# Sicilian Najdorf — white attacking chances
+rnbqkb1r/1p2pppp/p2p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6 1-0
+
+# K+R vs K — white winning endgame
+8/8/8/4k3/8/8/4K3/4R3 w - - 0 1 1-0
+
+# KID structure — black has kingside counterplay
+rnbq1rk1/ppp1npbp/3p2p1/3Pp3/2P1P3/2N2N2/PP2BPPP/R1BQ1RK1 b - - 0 10 0-1

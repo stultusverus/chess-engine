@@ -1,7 +1,9 @@
 #include "engine/attacks.h"
 #include "engine/board.h"
+#include "engine/eval.h"
 #include "engine/movegen.h"
 #include "engine/search.h"
+#include "engine/tune.h"
 #include "engine/types.h"
 
 #include <chrono>
@@ -527,6 +529,46 @@ int runEvalTrace(const std::string& fen, bool json) {
     return 0;
 }
 
+int runTuneEval(const std::string& path, bool json) {
+    chess::EvalParams params;
+    auto ds = chess::TuningDataset::load(path, false);
+
+    if (!ds.has_value()) {
+        std::cerr << "error: could not open file: " << path << '\n';
+        return 1;
+    }
+
+    for (const auto& w : ds->warnings)
+        std::cerr << "warning: " << w << '\n';
+
+    if (ds->entries.empty()) {
+        std::cerr << "error: no entries loaded\n";
+        return 1;
+    }
+
+    auto result = chess::optimizeK(*ds, params);
+
+    if (json) {
+        std::cout << "{\n";
+        std::cout << "  \"entries\": " << ds->entries.size() << ",\n";
+        std::cout << "  \"warnings\": " << ds->warnings.size() << ",\n";
+        std::cout << "  \"baselineK\": " << result.baselineK << ",\n";
+        std::cout << "  \"baselineLoss\": " << result.baselineLoss << ",\n";
+        std::cout << "  \"bestK\": " << result.bestK << ",\n";
+        std::cout << "  \"bestLoss\": " << result.bestLoss << '\n';
+        std::cout << "}\n";
+    } else {
+        std::cout << "entries " << ds->entries.size() << '\n';
+        if (!ds->warnings.empty())
+            std::cout << "warnings " << ds->warnings.size() << '\n';
+        std::cout << "baselineK " << result.baselineK << '\n';
+        std::cout << "baselineLoss " << result.baselineLoss << '\n';
+        std::cout << "bestK " << result.bestK << '\n';
+        std::cout << "bestLoss " << result.bestLoss << '\n';
+    }
+    return 0;
+}
+
 int main(int argc, char** argv) {
     chess::attacks::init();
     chess::Board::initZobrist();
@@ -536,6 +578,8 @@ int main(int argc, char** argv) {
     bool benchMode = false;
     bool traceMode = false;
     std::string traceFen;
+    bool tuneMode = false;
+    std::string tunePath;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -549,13 +593,22 @@ int main(int argc, char** argv) {
             std::vector<std::string> fenParts;
             while (i + 1 < argc) {
                 std::string next = argv[i + 1];
-                if (next == "--json" || next == "bench" || next == "trace") break;
+                if (next == "--json" || next == "bench" || next == "trace" || next == "tune-eval") break;
                 fenParts.push_back(next);
                 i++;
             }
             for (size_t j = 0; j < fenParts.size(); j++) {
                 if (j > 0) traceFen += ' ';
                 traceFen += fenParts[j];
+            }
+        } else if (arg == "tune-eval") {
+            tuneMode = true;
+            if (i + 1 < argc) {
+                std::string next = argv[i + 1];
+                if (next != "--json" && next != "bench" && next != "trace" && next != "tune-eval") {
+                    tunePath = next;
+                    i++;
+                }
             }
         } else {
             epdPath = arg;
@@ -568,6 +621,14 @@ int main(int argc, char** argv) {
             return 1;
         }
         return runEvalTrace(traceFen, json);
+    }
+
+    if (tuneMode) {
+        if (tunePath.empty()) {
+            std::cerr << "usage: bench_engine tune-eval <path> [--json]\n";
+            return 1;
+        }
+        return runTuneEval(tunePath, json);
     }
 
     if (benchMode)
