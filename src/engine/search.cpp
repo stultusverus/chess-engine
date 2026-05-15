@@ -481,8 +481,9 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         bool givesCheck = board.isInCheck();
 
         // Late move pruning: skip quiet non-checking moves beyond the move-count
-        // threshold at shallow non-PV nodes. Excludes TT, killer, counter, and
-        // low-history moves via the ordering score check.
+        // threshold at shallow non-PV nodes. The TT move is excluded by early
+        // search order; killer, counter, and high-history moves are excluded by
+        // the ordering score check (<= 0).
         if (!pvNode && ply > 0 && !inCheck && depth <= LMP_MAX_DEPTH &&
             movesMade >= lmpThreshold(depth) && isQuietHistoryMove(m) &&
             !givesCheck && moveOrderingScore <= 0) {
