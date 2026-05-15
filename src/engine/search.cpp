@@ -3,6 +3,7 @@
 #include "see.h"
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 
 namespace chess {
 
@@ -131,24 +132,47 @@ SearchResult Search::search(const Board& board, int maxDepth) {
 
     for (int depth = 1; depth <= maxDepth && depth < MAX_PLY - 20; depth++) {
         if (stop_.load() && depth > 1) break;
+        constexpr int ASPIRATION_START_DEPTH = 6;
+        constexpr int INITIAL_ASPIRATION_DELTA = 50;
+        constexpr int MAX_STAGED_ASPIRATION_RETRIES = 2;
+
         int alpha = -INF;
         int beta = INF;
 
-        if (depth >= 4) {
-            alpha = result.score - 30;
-            beta = result.score + 30;
+        if (depth >= ASPIRATION_START_DEPTH) {
+            int prevAbs = std::abs(result.score);
+            if (prevAbs < MATE - MAX_PLY * 2) {
+                alpha = result.score - INITIAL_ASPIRATION_DELTA;
+                beta  = result.score + INITIAL_ASPIRATION_DELTA;
+            }
         }
 
+        int retries = 0;
+        int aspDelta = INITIAL_ASPIRATION_DELTA;
         bool research = false;
         do {
             int score = alphaBeta(rootBoard, depth, alpha, beta, 0);
             if (stop_.load()) break;
 
             if (score <= alpha) {
-                alpha = -INF;
+                retries++;
+                if (retries >= MAX_STAGED_ASPIRATION_RETRIES) {
+                    alpha = -INF;
+                } else {
+                    aspDelta *= 2;
+                    alpha = std::max(score - aspDelta, -INF);
+                    beta  = std::min(score + aspDelta, beta);
+                }
                 research = true;
             } else if (score >= beta) {
-                beta = INF;
+                retries++;
+                if (retries >= MAX_STAGED_ASPIRATION_RETRIES) {
+                    beta = INF;
+                } else {
+                    aspDelta *= 2;
+                    alpha = std::max(score - aspDelta, alpha);
+                    beta  = std::min(score + aspDelta, INF);
+                }
                 research = true;
             } else {
                 research = false;
