@@ -395,6 +395,19 @@ void test_multiPvReportsMultipleLines() {
     CHECK(contains(output, "bestmove "));
 }
 
+void test_multiPvClockManagedSearch() {
+    std::string output = runEngineWithDelayedQuit(
+        "setoption name MultiPV value 2\n"
+        "position startpos\n"
+        "go wtime 30000 btime 30000 winc 0 binc 0\n",
+        "2.0");
+
+    CHECK(contains(output, "multipv 1"));
+    CHECK(contains(output, "multipv 2"));
+    CHECK(contains(output, "bestmove "));
+    CHECK(!contains(output, "bestmove 0000"));
+}
+
 void test_matedSideUsesUciMateFormat() {
     std::string output = runEngineWithDelayedQuit(
         "position fen 1k1R4/ppp5/8/8/8/8/PPP5/1K6 b - - 0 1\n"
@@ -523,6 +536,7 @@ int main() {
     RUN_TEST(lowClockKeepsInternalMoveOverhead);
     RUN_TEST(movetimeIgnoresMoveOverhead);
     RUN_TEST(multiPvReportsMultipleLines);
+    RUN_TEST(multiPvClockManagedSearch);
     RUN_TEST(matedSideUsesUciMateFormat);
     RUN_TEST(invalidFenDoesNotReplaceCurrentPosition);
     RUN_TEST(fenTrailingTokensRejected);

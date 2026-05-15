@@ -442,9 +442,15 @@ void UCI::handleGo(const std::string& line) {
     if (nodeLimit == 0 && !infinite && !moveImmediately && softTimeMs <= 0) {
         softTimeMs = 1;
     }
+    // Adaptive time management is intentionally disabled for MultiPV > 1
+    // because the serial line-by-line search does not have per-line time
+    // allocation semantics, and adaptive soft-time changes during one line
+    // can influence later lines in ways that are hard to reason about.
+    int multiPv = multiPv_;
     if (nodeLimit == 0 && !infinite && !moveImmediately) {
         hardTimeMs = std::max(softTimeMs, hardTimeMs);
-        search_.setTimeControlMs(softTimeMs, hardTimeMs, clockManagedSearch);
+        bool adaptive = clockManagedSearch && multiPv <= 1;
+        search_.setTimeControlMs(softTimeMs, hardTimeMs, adaptive);
     }
 
     // Probe opening book
@@ -482,7 +488,6 @@ void UCI::handleGo(const std::string& line) {
     int maxDepth = (infinite && depth <= 0) ? MAX_PLY : (depth > 0 ? depth : 64);
     Board searchBoard = board_;
     bool showWdl = showWdl_;
-    int multiPv = multiPv_;
     pondering_.store(false);
 
     // When the allowed root move set has exactly one legal move there is
