@@ -45,9 +45,10 @@ void Search::setTimeMs(int ms) {
     setTimeControlMs(ms, ms);
 }
 
-void Search::setTimeControlMs(int softMs, int hardMs) {
+void Search::setTimeControlMs(int softMs, int hardMs, bool adaptiveTimeManagement) {
     softTimeMs_ = std::max(0, softMs);
     hardTimeMs_ = std::max(softTimeMs_, hardMs);
+    adaptiveTimeManagement_ = adaptiveTimeManagement;
     infinite_ = false;
     stop_.store(false);
     maxNodes_ = 0;
@@ -58,6 +59,7 @@ void Search::setInfinite(bool inf) {
     infinite_ = inf;
     softTimeMs_ = 0;
     hardTimeMs_ = 0;
+    adaptiveTimeManagement_ = false;
     stop_.store(false);
     maxNodes_ = 0;
     clearTimeStartOverride();
@@ -68,6 +70,7 @@ void Search::setNodeLimit(uint64_t nodes) {
     softTimeMs_ = 0;
     hardTimeMs_ = 0;
     infinite_ = false;
+    adaptiveTimeManagement_ = false;
     stop_.store(false);
     clearTimeStartOverride();
 }
@@ -113,7 +116,6 @@ SearchResult Search::search(const Board& board, int maxDepth) {
     prevBestMove_ = Move();
     prevScore_ = 0;
     stableIterations_ = 0;
-    rootMoveCount_ = 0;
     originalSoftTimeMs_ = softTimeMs_;
 
     startTime_ = useStartTimeOverride_ ? startTimeOverride_ : std::chrono::steady_clock::now();
@@ -178,8 +180,8 @@ SearchResult Search::search(const Board& board, int maxDepth) {
         prevBestMove_ = bestMoveRoot_;
         prevScore_ = result.score;
 
-        // Adjust soft time based on stability (clock-managed searches only)
-        if (!infinite_ && hardTimeMs_ > 0 && depth >= 4) {
+        // Adjust soft time based on stability (adaptive-time searches only)
+        if (adaptiveTimeManagement_ && hardTimeMs_ > 0 && depth >= 4) {
             // Derive adjustment from the original soft time to avoid compounding
             int adjustedSoft = originalSoftTimeMs_;
             // Stable position: reduce time after 2+ stable iterations
@@ -310,10 +312,6 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         }
         st.moves = filtered;
     }
-
-    // Capture root legal move count for time management
-    if (ply == 0 && rootMoveCount_ == 0)
-        rootMoveCount_ = st.moves.size();
 
     if (st.moves.size() == 0) {
         return inCheck ? -MATE + ply : 0;

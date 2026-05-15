@@ -483,6 +483,20 @@ void test_lowClockReturnsLegalMove() {
     CHECK(!contains(output, "bestmove 0000"));
 }
 
+void test_movetimeNotAdaptivelyShortened() {
+    // go movetime is a fixed-time search, not clock-managed.
+    // Adaptive time management (stability reductions / score-drop
+    // extensions) must not apply to movetime searches.
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "go movetime 300\n",
+        "0.5");
+
+    CHECK(contains(output, "bestmove "));
+    CHECK(!contains(output, "bestmove 0000"));
+    CHECK(contains(output, "info depth "));
+}
+
 int main() {
     std::cout << "Running UCI tests:" << std::endl;
     RUN_TEST(rejectsInvalidCoordinates);
@@ -517,6 +531,7 @@ int main() {
     RUN_TEST(unknownPositionTypeDoesNotMutateBoard);
     RUN_TEST(singleLegalMoveRespondsQuickly);
     RUN_TEST(lowClockReturnsLegalMove);
+    RUN_TEST(movetimeNotAdaptivelyShortened);
 
     if (failures > 0) {
         std::cerr << "\n" << failures << " test(s) failed." << std::endl;

@@ -444,7 +444,7 @@ void UCI::handleGo(const std::string& line) {
     }
     if (nodeLimit == 0 && !infinite && !moveImmediately) {
         hardTimeMs = std::max(softTimeMs, hardTimeMs);
-        search_.setTimeControlMs(softTimeMs, hardTimeMs);
+        search_.setTimeControlMs(softTimeMs, hardTimeMs, clockManagedSearch);
     }
 
     // Probe opening book
