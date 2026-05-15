@@ -395,6 +395,23 @@ void test_multiPvReportsMultipleLines() {
     CHECK(contains(output, "bestmove "));
 }
 
+void test_multiPvClockManagedSearch() {
+    // Use a depth-bounded clock-managed search so the search completes
+    // deterministically.  The small pipe-delay (0.2 s) is only there to
+    // let the search thread start before quit arrives; depth 1 ensures
+    // both PV lines finish in milliseconds regardless of sanitizers.
+    std::string output = runEngineWithDelayedQuit(
+        "setoption name MultiPV value 2\n"
+        "position startpos\n"
+        "go wtime 30000 btime 30000 winc 0 binc 0 depth 1\n",
+        "0.2");
+
+    CHECK(contains(output, "multipv 1"));
+    CHECK(contains(output, "multipv 2"));
+    CHECK(contains(output, "bestmove "));
+    CHECK(!contains(output, "bestmove 0000"));
+}
+
 void test_matedSideUsesUciMateFormat() {
     std::string output = runEngineWithDelayedQuit(
         "position fen 1k1R4/ppp5/8/8/8/8/PPP5/1K6 b - - 0 1\n"
@@ -523,6 +540,7 @@ int main() {
     RUN_TEST(lowClockKeepsInternalMoveOverhead);
     RUN_TEST(movetimeIgnoresMoveOverhead);
     RUN_TEST(multiPvReportsMultipleLines);
+    RUN_TEST(multiPvClockManagedSearch);
     RUN_TEST(matedSideUsesUciMateFormat);
     RUN_TEST(invalidFenDoesNotReplaceCurrentPosition);
     RUN_TEST(fenTrailingTokensRejected);
