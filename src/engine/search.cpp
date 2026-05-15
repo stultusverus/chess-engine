@@ -32,6 +32,14 @@ bool hasNonPawnMaterial(const Board& board, Color side) {
     return pieces != pawnsAndKing;
 }
 
+// Late move pruning constants
+static constexpr int LMP_MAX_DEPTH = 3;
+
+static int lmpThreshold(int depth) {
+    // depth 1: 5, depth 2: 8, depth 3: 13
+    return 4 + depth * depth;
+}
+
 } // namespace
 
 Search::Search() {
@@ -471,6 +479,17 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         UndoInfo undo;
         if (!board.makeMove(m, undo)) continue;
         bool givesCheck = board.isInCheck();
+
+        // Late move pruning: skip quiet non-checking moves beyond the move-count
+        // threshold at shallow non-PV nodes. The TT move is excluded by early
+        // search order; killer, counter, and high-history moves are excluded by
+        // the ordering score check (<= 0).
+        if (!pvNode && ply > 0 && !inCheck && depth <= LMP_MAX_DEPTH &&
+            movesMade >= lmpThreshold(depth) && isQuietHistoryMove(m) &&
+            !givesCheck && moveOrderingScore <= 0) {
+            board.unmakeMove(m, undo);
+            continue;
+        }
 
         if (isQuietHistoryMove(m)) {
             setContinuationContext(ply + 1, movedPiece, m);
