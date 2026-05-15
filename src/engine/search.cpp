@@ -45,9 +45,10 @@ void Search::setTimeMs(int ms) {
     setTimeControlMs(ms, ms);
 }
 
-void Search::setTimeControlMs(int softMs, int hardMs) {
+void Search::setTimeControlMs(int softMs, int hardMs, bool adaptiveTimeManagement) {
     softTimeMs_ = std::max(0, softMs);
     hardTimeMs_ = std::max(softTimeMs_, hardMs);
+    adaptiveTimeManagement_ = adaptiveTimeManagement;
     infinite_ = false;
     stop_.store(false);
     maxNodes_ = 0;
@@ -58,6 +59,7 @@ void Search::setInfinite(bool inf) {
     infinite_ = inf;
     softTimeMs_ = 0;
     hardTimeMs_ = 0;
+    adaptiveTimeManagement_ = false;
     stop_.store(false);
     maxNodes_ = 0;
     clearTimeStartOverride();
@@ -68,6 +70,7 @@ void Search::setNodeLimit(uint64_t nodes) {
     softTimeMs_ = 0;
     hardTimeMs_ = 0;
     infinite_ = false;
+    adaptiveTimeManagement_ = false;
     stop_.store(false);
     clearTimeStartOverride();
 }
@@ -110,6 +113,11 @@ SearchResult Search::search(const Board& board, int maxDepth) {
     std::fill(std::begin(continuationToByPly_), std::end(continuationToByPly_), SQ_NONE);
     ageHistory();
 
+    prevBestMove_ = Move();
+    prevScore_ = 0;
+    stableIterations_ = 0;
+    originalSoftTimeMs_ = softTimeMs_;
+
     startTime_ = useStartTimeOverride_ ? startTimeOverride_ : std::chrono::steady_clock::now();
     Board rootBoard = board;
 
@@ -140,7 +148,11 @@ SearchResult Search::search(const Board& board, int maxDepth) {
             }
         } while (research && !stop_.load());
 
-        if (stop_.load()) break;
+        if (stop_.load()) {
+            if (result.bestMove.from == SQ_NONE && bestMoveRoot_.from != SQ_NONE)
+                result.bestMove = bestMoveRoot_;
+            break;
+        }
 
         result.depth = depth;
         result.bestMove = bestMoveRoot_;
@@ -149,6 +161,43 @@ SearchResult Search::search(const Board& board, int maxDepth) {
         result.nps = result.timeMs > 0 ? nodes_ * 1000ULL / static_cast<uint64_t>(result.timeMs) : nodes_;
         result.hashFull = tt_.hashFull();
         result.pv = extractPv(board, result.bestMove, depth);
+
+        // --- Time management: stability-based adjustments ---
+
+        // Track PV and score stability (side-relative)
+        bool pvChanged = (depth >= 2 && !sameMove(bestMoveRoot_, prevBestMove_));
+        int sideRelScore = (rootBoard.sideToMove() == WHITE) ? result.score : -result.score;
+        int sideRelPrev = (rootBoard.sideToMove() == WHITE) ? prevScore_ : -prevScore_;
+        int scoreDrop = (depth >= 2) ? (sideRelPrev - sideRelScore) : 0;
+
+        if (depth >= 2) {
+            if (pvChanged) {
+                stableIterations_ = 0;
+            } else {
+                stableIterations_++;
+            }
+        }
+        prevBestMove_ = bestMoveRoot_;
+        prevScore_ = result.score;
+
+        // Adjust soft time based on stability (adaptive-time searches only)
+        if (adaptiveTimeManagement_ && hardTimeMs_ > 0 && depth >= 4) {
+            // Derive adjustment from the original soft time to avoid compounding
+            int adjustedSoft = originalSoftTimeMs_;
+            // Stable position: reduce time after 2+ stable iterations
+            if (stableIterations_ >= 2) {
+                adjustedSoft = originalSoftTimeMs_ * 3 / 4;
+            }
+            // Score dropping: allocate more time
+            if (scoreDrop > 50) {
+                adjustedSoft = originalSoftTimeMs_ * 3 / 2;
+            }
+            // Respect hard cap
+            adjustedSoft = std::min(adjustedSoft, hardTimeMs_);
+            if (adjustedSoft != softTimeMs_) {
+                softTimeMs_ = adjustedSoft;
+            }
+        }
 
         if (infoCallback_) {
             infoCallback_(result);

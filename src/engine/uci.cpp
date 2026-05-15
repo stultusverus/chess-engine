@@ -444,7 +444,7 @@ void UCI::handleGo(const std::string& line) {
     }
     if (nodeLimit == 0 && !infinite && !moveImmediately) {
         hardTimeMs = std::max(softTimeMs, hardTimeMs);
-        search_.setTimeControlMs(softTimeMs, hardTimeMs);
+        search_.setTimeControlMs(softTimeMs, hardTimeMs, clockManagedSearch);
     }
 
     // Probe opening book
@@ -484,6 +484,32 @@ void UCI::handleGo(const std::string& line) {
     bool showWdl = showWdl_;
     int multiPv = multiPv_;
     pondering_.store(false);
+
+    // When the allowed root move set has exactly one legal move there is
+    // no search decision to make — return it immediately.
+    if (clockManagedSearch && !moveImmediately && nodeLimit == 0 && !infinite) {
+        MoveList rootMoves;
+        MoveGenerator preGen;
+        preGen.generateLegalMoves(board_, rootMoves);
+        if (!searchMoves.empty()) {
+            MoveList filtered;
+            for (const Move& m : rootMoves) {
+                for (const Move& allowed : searchMoves) {
+                    if (allowed.from == m.from && allowed.to == m.to &&
+                        (allowed.promotion == PIECE_TYPE_NB || allowed.promotion == m.promotion)) {
+                        filtered.add(m);
+                        break;
+                    }
+                }
+            }
+            rootMoves = filtered;
+        }
+        if (rootMoves.size() == 1) {
+            std::cout << "bestmove " << moveToString(rootMoves[0]) << std::endl;
+            return;
+        }
+    }
+
     search_.setRootMoves(searchMoves);
     auto sharedSearchStart = std::chrono::steady_clock::now();
     if (multiPv <= 1) {
@@ -540,13 +566,10 @@ void UCI::handleGo(const std::string& line) {
             }
             search_.clearTimeStartOverride();
         }
-        if (!hasRootMoves && (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE)) {
-            MoveList moves;
-            MoveGenerator gen;
-            gen.generateMoves(searchBoard, moves);
-            if (moves.size() > 0) {
-                result.bestMove = moves[0];
-            }
+        if (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE) {
+            auto fallback = firstAllowedLegalMove(searchBoard, searchMoves);
+            if (fallback)
+                result.bestMove = *fallback;
         }
 
         if (result.bestMove.from == SQ_NONE || result.bestMove.to == SQ_NONE) {

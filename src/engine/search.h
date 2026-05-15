@@ -44,7 +44,7 @@ public:
     Search();
 
     void setTimeMs(int ms);
-    void setTimeControlMs(int softMs, int hardMs);
+    void setTimeControlMs(int softMs, int hardMs, bool adaptiveTimeManagement = false);
     void setInfinite(bool inf);
     void setNodeLimit(uint64_t nodes);
     void setTimeStartOverride(std::chrono::steady_clock::time_point startTime);
@@ -95,6 +95,13 @@ private:
     uint64_t nodes_ = 0;
     uint64_t nodesLimit_ = 0;
     uint64_t maxNodes_ = 0;
+
+    // Time management: stability tracking
+    Move prevBestMove_{};
+    int prevScore_ = 0;
+    int stableIterations_ = 0;
+    int originalSoftTimeMs_ = 0;
+    bool adaptiveTimeManagement_ = false;
 
     // Move ordering
     static constexpr int KILLER_SCORE = 50000;
