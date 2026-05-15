@@ -11,6 +11,14 @@ static double sigmoid(double x) {
     return 1.0 / (1.0 + std::exp(-x));
 }
 
+static std::string trim(std::string s) {
+    auto first = s.find_first_not_of(" \t");
+    if (first == std::string::npos)
+        return "";
+    auto last = s.find_last_not_of(" \t");
+    return s.substr(first, last - first + 1);
+}
+
 std::optional<TuningDataset> TuningDataset::load(const std::string& path, bool strict) {
     std::ifstream file(path);
     if (!file.is_open())
@@ -23,9 +31,12 @@ std::optional<TuningDataset> TuningDataset::load(const std::string& path, bool s
     while (std::getline(file, line)) {
         lineNum++;
 
-        // Trim trailing carriage return
+        // Normalise line endings and whitespace
         if (!line.empty() && line.back() == '\r')
             line.pop_back();
+        line = trim(line);
+        for (auto& c : line)
+            if (c == '\t') c = ' ';
 
         // Skip blank lines and comments
         if (line.empty() || line[0] == '#')

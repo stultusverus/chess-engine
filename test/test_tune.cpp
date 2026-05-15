@@ -117,6 +117,51 @@ static void test_parse_carriage_return() {
     std::remove(tmpPath.c_str());
 }
 
+static void test_parse_trailing_spaces() {
+    // Trailing spaces after the result token should be trimmed
+    std::string tmpPath = "test_tune_trail.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 1-0   \n";
+    }
+    auto ds = chess::TuningDataset::load(tmpPath, false);
+    CHECK(ds.has_value());
+    CHECK(ds->warnings.empty());
+    CHECK(ds->entries.size() == 1);
+    CHECK(ds->entries[0].target == 1.0);
+    std::remove(tmpPath.c_str());
+}
+
+static void test_parse_leading_whitespace_comment() {
+    // Lines with leading whitespace before # should be treated as comments
+    std::string tmpPath = "test_tune_lead.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "   # this is a comment with leading spaces\n";
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 1/2-1/2\n";
+    }
+    auto ds = chess::TuningDataset::load(tmpPath, false);
+    CHECK(ds.has_value());
+    CHECK(ds->warnings.empty());
+    CHECK(ds->entries.size() == 1);
+    std::remove(tmpPath.c_str());
+}
+
+static void test_parse_tabs_around_result() {
+    // Tabs around the result token should be trimmed
+    std::string tmpPath = "test_tune_tabs.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\t0-1\n";
+    }
+    auto ds = chess::TuningDataset::load(tmpPath, false);
+    CHECK(ds.has_value());
+    CHECK(ds->warnings.empty());
+    CHECK(ds->entries.size() == 1);
+    CHECK(ds->entries[0].target == 0.0);
+    std::remove(tmpPath.c_str());
+}
+
 // ---------- loss function tests ----------
 
 static void test_loss_range() {
@@ -225,6 +270,9 @@ int main() {
     RUN_TEST(parse_invalid_fen_rejected);
     RUN_TEST(parse_file_not_found);
     RUN_TEST(parse_carriage_return);
+    RUN_TEST(parse_trailing_spaces);
+    RUN_TEST(parse_leading_whitespace_comment);
+    RUN_TEST(parse_tabs_around_result);
     RUN_TEST(loss_range);
     RUN_TEST(loss_deterministic);
     RUN_TEST(loss_empty_dataset);

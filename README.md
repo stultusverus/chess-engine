@@ -115,8 +115,12 @@ rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 1/2-1/2
 ```
 
 Results must be `1-0` (white win), `1/2-1/2` (draw), or `0-1` (black win).
-Blank lines and lines starting with `#` are ignored. Malformed lines are
-reported as warnings and skipped.
+Leading/trailing whitespace is trimmed. Blank lines and lines starting with
+`#` are ignored. Malformed lines are reported as warnings and skipped.
+
+The committed fixture at `test/fixtures/tune-small.txt` is a smoke-test dataset
+for validating the scaffold, not a real tuning corpus. Real tuning requires a
+larger dataset of quiet positions from actual games.
 
 The scaffold does **not** change engine evaluation parameters. It reports
 baseline loss (K=1.0) and the best K found via golden-section search. All
