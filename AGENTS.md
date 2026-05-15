@@ -18,6 +18,15 @@ settings technically allow direct pushes or merges.
 
 If a task requires an operation above, stop and ask the user to perform or explicitly authorise it.
 
+## Shell command guidelines
+
+- Avoid command substitution: do not use `$(...)` or backticks.
+- Avoid variable expansion (e.g. `$VAR`); use literal values instead.
+- Do not chain commands with `&&`, `||`, `;`, or pipes `|`.
+  Run each command as a separate tool call.
+- Avoid redirection (`>`, `>>`) — use the file edit tools instead.
+- Prefer the simplest literal command form so it matches the allowlist.
+
 ## GitHub Workflow
 
 Use this workflow for planned work:
