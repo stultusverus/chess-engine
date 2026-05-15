@@ -42,7 +42,7 @@ Use this workflow for planned work:
 
 Recommended branch naming:
 
-```
+```text
 fix/gh-issue-9-uci-stdout
 feat/gh-issue-15-bench-signature
 refactor/gh-issue-22-eval-params
@@ -64,6 +64,11 @@ Closes #
 
 Use `Closes #N` only when the PR is ready to close the issue on merge.
 
+Before requesting review after a rework, update the PR body so that Summary,
+Tests, Risk, and Notes describe the current implementation, not an earlier
+attempt. If a review requested a design change, mention how the final patch
+addresses it.
+
 ## Pull Request Scope Rules
 
 Every PR must be reviewable as a single logical change.
@@ -78,12 +83,25 @@ Allowed:
 Not allowed:
 
 * Drive-by formatting of unrelated files.
-* Updating AGENTS.md, README.md, or PROGRESS.md unless directly relevant.
+* Updating AGENTS.md, CLAUDE.md, README.md, or PROGRESS.md unless directly relevant.
 * Combining unrelated bug fixes.
 * Combining search/eval strength changes with mechanical refactors.
 * Combining benchmark harness changes with engine behaviour changes unless required.
 
 If unrelated cleanup is found, split it into a separate PR.
+
+## Post-Rework Review Checklist
+
+Before marking a PR ready for review after substantial changes, check for stale
+artefacts left by earlier implementation attempts:
+
+* unused member variables or dead helper functions;
+* stale comments describing old behaviour;
+* tests that still assert old behaviour;
+* PR body text that no longer matches the implementation;
+* documentation that still describes previous semantics.
+
+Remove obsolete state rather than keeping it as defensive clutter.
 
 ## Build
 
@@ -94,7 +112,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
 
-## Produces:
+## Produces
 
 * chess-engine — UCI engine using stdin/stdout protocol.
 * bench_engine — local perft/search/tactical benchmark runner.
@@ -130,6 +148,19 @@ When changing search, evaluation, or move ordering, also run:
 For strength-sensitive changes, do not rely on unit tests alone. Use FastChess /
 SPRT or another match framework as required by the issue.
 
+## Async and Timing Test Rules
+
+When a UCI test fails because of `quit`, `stop`, wall-clock delay, or sanitizer
+slowdown, do not fix it by only increasing sleeps, delays, or time limits.
+
+First decide whether the expected behaviour should be deterministic. Prefer code
+paths that remove races, such as returning the only legal root move immediately,
+over tests that depend on CI runner timing.
+
+Timing-based tests must verify protocol invariants, not exact depth counts,
+precise elapsed time, or the final info line when a search can finish before
+`quit` or `stop` is delivered.
+
 ## UCI Protocol Rules
 
 UCI protocol responses must go to stdout:
@@ -150,8 +181,30 @@ Internal diagnostics may go to stderr:
 Do not emit protocol messages on stderr. This can break GUI and bot integration.
 
 Avoid brittle UCI tests that depend on exact asynchronous info depth line counts
-or the final info line when a search can finish before quit or stop is
+or the final info line when a search can finish before `quit` or `stop` is
 delivered. Prefer checking required tokens and using enough delay for CI runners.
+
+## Time Control Semantics
+
+Keep UCI time-control modes explicit. Do not infer clock-managed search from
+generic timed-search state such as `!infinite && hardTimeMs > 0`.
+
+Distinguish at least:
+
+* fixed movetime: `go movetime N`;
+* clock-managed search: `go wtime ... btime ...`;
+* node-limited search: `go nodes N`;
+* infinite search: `go infinite`;
+* default fallback search.
+
+Adaptive time-management heuristics may only apply to clock-managed searches
+unless the issue explicitly says otherwise.
+
+When changing time management, check MultiPV separately. Current MultiPV is
+serial: the engine searches one PV line after another using shared timing
+context. A time-management change for single-PV search may not be safe for
+`MultiPV > 1`. Either test MultiPV explicitly or disable the new adaptive
+behaviour for MultiPV until its time-allocation semantics are clear.
 
 ## Benchmark and Strength Testing
 
@@ -171,6 +224,8 @@ Rules:
 * Deterministic signatures should exclude timing fields.
 * If a search/eval change intentionally changes the bench signature, document why.
 * Keep benchmark changes separate from engine-strength changes unless the issue requires both.
+* For search/eval/move-ordering changes, reduced node count or unchanged tactical EPD is not sufficient evidence of improvement.
+* If SPRT is required and the result is negative, accepts H0 with a negative observed score, or otherwise fails the issue acceptance criteria, close the PR unmerged and document the result on the issue.
 
 ## Lint
 
@@ -205,6 +260,7 @@ Do not introduce a new lint dependency unless the issue calls for it.
 * For parser/loader changes, test both accepted and rejected inputs.
 * For invalid input, test that previous valid state is preserved.
 * For UCI changes, test the actual protocol output, not only internal functions.
+* For time-management changes, test fixed movetime, clock-managed search, low-clock behaviour, and `searchmoves` restrictions separately when relevant.
 
 ## Documentation Rules
 
@@ -225,7 +281,7 @@ Use focused commits with clear messages.
 
 Examples:
 
-```
+```text
 fix: send book info string to stdout
 fix: parse go nodes as uint64
 feat: add deterministic bench signature mode
@@ -235,9 +291,11 @@ ci: add release smoke test
 
 Avoid vague messages:
 
+```text
 update
 fix stuff
 changes
+```
 
 ## Key Modules
 
@@ -255,3 +313,4 @@ changes
 | UCI        | src/engine/uci.h, src/engine/uci.cpp         | UCI protocol, options, time management, MultiPV, WDL                    |
 | Bench      | tools/bench.cpp                              | Perft/search/EPD/bench-signature tooling                                |
 | Poly Keys  | src/engine/poly_keys.h                       | Polyglot Zobrist constants                                              |
+
