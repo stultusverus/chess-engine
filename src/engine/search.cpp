@@ -146,7 +146,11 @@ SearchResult Search::search(const Board& board, int maxDepth) {
             }
         } while (research && !stop_.load());
 
-        if (stop_.load()) break;
+        if (stop_.load()) {
+            if (result.bestMove.from == SQ_NONE && bestMoveRoot_.from != SQ_NONE)
+                result.bestMove = bestMoveRoot_;
+            break;
+        }
 
         result.depth = depth;
         result.bestMove = bestMoveRoot_;

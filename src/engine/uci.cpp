@@ -504,8 +504,8 @@ void UCI::handleGo(const std::string& line) {
             rootMoves = filtered;
         }
         if (rootMoves.size() == 1) {
-            softTimeMs = std::min(softTimeMs, 50);
-            hardTimeMs = std::min(hardTimeMs, 100);
+            softTimeMs = std::min(softTimeMs, 100);
+            hardTimeMs = std::min(hardTimeMs, 200);
             search_.setTimeControlMs(softTimeMs, hardTimeMs);
         }
     }
