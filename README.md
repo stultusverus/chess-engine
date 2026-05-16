@@ -10,12 +10,14 @@ src/engine/               # Chess engine core
 ├── attacks.h/cpp         #   Magic bitboard attack tables (all piece types)
 ├── board.h/cpp           #   Bitboard board, FEN, make/unmake, Zobrist hash, incremental eval state
 ├── movegen.h/cpp         #   Check/pin-aware legal move generation (perft-verified)
-├── eval.h/cpp            #   Tapered PeSTO eval + pawn/eval caches, mobility, king safety
+├── eval.h/cpp            #   Tapered PeSTO eval with pawn/eval caches, mobility, king safety
+├── eval_params.h         #   Tunable evaluation parameters (centralised for Texel/SPSA)
 ├── see.h/cpp             #   Static exchange evaluation for move ordering and pruning
-├── search.h/cpp          #   Alpha-beta PVS + staged move picking + LMR + null move pruning
+├── search.h/cpp          #   Alpha-beta PVS with aspiration windows, LMR, LMP, null-move pruning
 ├── tt.h/cpp              #   4-way clustered, generation-aware TT with static eval storage (16B entries)
 ├── book.h/cpp            #   Polyglot opening book loader (.bin format, weighted random)
-├── uci.h/cpp             #   UCI protocol handler (WDL support, time management)
+├── uci.h/cpp             #   UCI protocol handler (WDL support, time management, MultiPV)
+├── tune.h/cpp            #   Texel tuning scaffold (dataset loader, MSE loss, K-parameter opt)
 └── poly_keys.h           #   Polyglot Zobrist key constants (header-only)
 ```
 
@@ -28,10 +30,9 @@ src/engine/               # Chess engine core
 ## Quick Start
 
 ```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(sysctl -n hw.ncpu)  # Linux: use $(nproc)
-./chess-engine               # Run as UCI engine
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+./build/chess-engine         # Run as UCI engine
 ```
 
 Use in any UCI-compatible chess GUI (CuteChess, Arena, etc.).
@@ -74,11 +75,12 @@ polyglot make-book -pgn games.pgn -bin mybook.bin -max-ply 20
 Run the lightweight in-repo benchmark target after building:
 
 ```bash
-./bench_engine                         # built-in perft + search benchmark
-./bench_engine --json                  # same, machine-readable JSON
-./bench_engine path/to/tactical.epd    # EPD best-move test
-./bench_engine bench                   # deterministic bench signature mode
-./bench_engine bench --json            # bench signature, JSON for CI
+./build/bench_engine                         # built-in perft + search benchmark
+./build/bench_engine --json                  # same, machine-readable JSON
+./build/bench_engine test/fixtures/tactical.epd  # EPD tactical test
+./build/bench_engine trace <FEN> [--json]    # eval trace (per-term breakdown)
+./build/bench_engine bench                   # deterministic bench signature mode
+./build/bench_engine bench --json            # bench signature, JSON for CI
 ```
 
 ### Bench Signature
@@ -100,8 +102,8 @@ computes a baseline mean-squared-error loss, and performs a lightweight
 K-parameter optimisation as a proof of concept.
 
 ```bash
-./bench_engine tune-eval path/to/dataset.txt       # human-readable report
-./bench_engine tune-eval path/to/dataset.txt --json # machine-readable JSON
+./build/bench_engine tune-eval path/to/dataset.txt       # human-readable report
+./build/bench_engine tune-eval path/to/dataset.txt --json # machine-readable JSON
 ```
 
 #### Dataset Format
@@ -129,21 +131,42 @@ multi-parameter Texel or SPSA tuning with separate review and SPRT.
 
 ## Features
 
-- Magic bitboard move generation with check/pin awareness
-- Tapered evaluation with PeSTO piece-square tables, pawn structure, mobility, king safety
-- PVS alpha-beta search with iterative deepening, aspiration windows, null-move pruning, LMR
-- Staged move ordering: TT move, SEE-filtered captures, killer/countermove, history heuristic
-- 4-way clustered transposition table with generation aging and static eval storage
+### Search
+- PVS alpha-beta with iterative deepening
+- Aspiration windows from depth 4 with retry on fail-high/fail-low
+- Null-move pruning with mate-guard verification (R=3)
+- Late-move reductions (LMR) with PV/non-PV distinction
+- Late-move pruning (LMP) at shallow non-PV nodes for quiet non-checking moves
+- Futility pruning at depths 1–2
+- Adaptive time management with stability and score-drop detection
+- Staged move ordering: TT move → SEE-filtered good captures → killer/countermove → history heuristic → bad captures
+- Countermove and continuation history (butterfly + piece-square + capture history)
+- Node-limited search (`go nodes N`)
+
+### Evaluation
+- Tapered PeSTO evaluation with piece-square tables
+- Pawn structure: doubled, isolated, passed pawns
+- Mobility (per-piece multipliers by game phase)
+- King safety: shield, open-file penalty, attacker proximity
+- Bishop pair, rook on (semi-)open file, tempo bonus
+- Eval trace mode for per-term breakdown
+- Centralised `EvalParams` struct for Texel/SPSA tuning
+
+### Transposition Table
+- 4-way clustered, depth-preferred replacement with generation aging
+- Static eval storage in TT entries (16 bytes per entry)
+
+### UCI Protocol
+- Clock-managed, fixed movetime, node-limited, and infinite search modes
+- MultiPV (1–4 lines)
+- WDL reporting with sigmoid approximation
 - Polyglot opening book support (weighted random or deterministic)
-- UCI protocol with time management, MultiPV, WDL reporting
-- Incremental material/PST evaluation with pawn hash and eval cache
-- Deterministic make/unmake with full state rollback (hash, eval, pawn hash, repetition)
+- `searchmoves` root move restriction
 
 ## Roadmap
 
-- Automated classical eval tuning (Texel/SPSA)
-- Fixed-node/depth tactical EPD and speed benchmark suites
-- Optional Syzygy endgame tablebase probing
+- Multi-parameter Texel/SPSA eval tuning (scaffold in place, K-only today)
+- Syzygy endgame tablebase probing
 - NNUE evaluation experiment
 - SMP search with UCI `Threads`
 
