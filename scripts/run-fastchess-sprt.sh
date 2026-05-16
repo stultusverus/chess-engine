@@ -213,7 +213,7 @@ printf '\n'
 cd "${run_dir}"
 if [[ "${quiet_console}" == "1" ]]; then
     # Keep the full FastChess log, but drop verbose position dumps from the terminal.
-    exec > >(tee -a "${run_log}" | grep -Ev '^(Position;|Moves;|Info;|Warning;)') 2>&1
+    exec > >(tee -a "${run_log}" | grep -Ev '^(Started game|Finished game|Position;|Moves;|Info;|Warning;)') 2>&1
 else
     exec > >(tee -a "${run_log}") 2>&1
 fi
