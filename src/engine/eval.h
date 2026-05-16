@@ -72,7 +72,7 @@ public:
     // supplied EvalParams instead of from the board's incremental state.
     // Other terms (pawn structure, mobility, etc.) use this instance's params_.
     // Does NOT use or populate caches — intended for tuning/loss computation.
-    int evaluate(const Board& board, const EvalParams& params) const;
+    int evaluate(const Board& board, const EvalParams& params);
 
     // Access to tunable parameters (non-const for future tuning tools)
     EvalParams& params() { return params_; }

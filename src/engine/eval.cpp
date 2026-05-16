@@ -42,7 +42,7 @@ int Eval::material(const Board& board) const {
 
 int Eval::material(const Board& board, const EvalParams& params) const {
     int score = 0;
-    for (int pt = PAWN; pt <= KING; pt++) {
+    for (int pt = PAWN; pt <= QUEEN; pt++) {
         PieceType ptype = PieceType(pt);
         int val = params.pieceValue(ptype);
         score += popcount(board.pieces(WHITE, ptype)) * val;
@@ -467,11 +467,8 @@ int Eval::evaluate(const Board& board) const {
     return score;
 }
 
-int Eval::evaluate(const Board& board, const EvalParams& params) const {
-    EvalParams saved = params_;
-    // Set instance params so that mobility, bishop pair, etc. use the
-    // supplied parameter set.  Restore before returning.
-    const_cast<Eval*>(this)->params_ = params;
+int Eval::evaluate(const Board& board, const EvalParams& params) {
+    params_ = params;
 
     int phase = gamePhase(board, params);
     int score = material(board, params) + pieceSquare(board, params, phase) +
@@ -479,7 +476,6 @@ int Eval::evaluate(const Board& board, const EvalParams& params) const {
                 bishopPair(board, phase) + rookOnFile(board, phase) +
                 kingSafety(board, phase) + tempo(board);
 
-    const_cast<Eval*>(this)->params_ = saved;
     return score;
 }
 
