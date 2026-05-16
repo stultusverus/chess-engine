@@ -34,7 +34,7 @@ jobs:
 
     container:
       image: ghcr.io/stultusverus/chess-sprt-runner:latest
-      options: --cpus 4 --memory 8g --user 1002:1002
+      options: --cpus 4 --memory 8g -v /__w/_temp:/__w/_temp
 
     timeout-minutes: 720
 
