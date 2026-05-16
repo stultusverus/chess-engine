@@ -107,3 +107,6 @@ add_test(NAME eval_trace COMMAND bench_engine trace rnbqkbnr/pppppppp/8/8/8/8/PP
 
 # Tune-eval fixture smoke test
 add_test(NAME tune_fixture COMMAND bench_engine tune-eval ${CMAKE_SOURCE_DIR}/test/fixtures/tune-small.txt --json)
+
+# Bench signature verification (informational: compares current signature against committed reference)
+add_test(NAME bench_signature COMMAND ${CMAKE_SOURCE_DIR}/scripts/verify-bench-signature.sh)
