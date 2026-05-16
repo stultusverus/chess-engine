@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Trust Git workspace
         shell: bash
         run: |
@@ -81,36 +81,53 @@ jobs:
               echo "base_sha=$(git rev-parse FETCH_HEAD)" >> "${GITHUB_OUTPUT}"
               echo "head_sha=$(git rev-parse "${head_ref}")" >> "${GITHUB_OUTPUT}"
           fi
+    
+      - name: Prepare SPRT work directory
+        shell: bash
+        run: |
+          rm -rf /tmp/chess-sprt
+          mkdir -p /tmp/chess-sprt/books
+          mkdir -p /tmp/chess-sprt/vers
+          mkdir -p /tmp/chess-sprt/runs
+          cp "${GITHUB_WORKSPACE}/books/8moves_v3.pgn" /tmp/chess-sprt/books/8moves_v3.pgn
+          test -f /tmp/chess-sprt/books/8moves_v3.pgn
+          echo "Prepared /tmp/chess-sprt"
 
       - name: Build base engine
         shell: bash
         run: |
+          cd "${GITHUB_WORKSPACE}"
           git checkout "${{ steps.refs.outputs.base_sha }}"
-          cmake -S . -B build-base -DCMAKE_BUILD_TYPE=Release
-          cmake --build build-base --parallel 4
-          mkdir -p scripts/vers
-          cp build-base/chess-engine scripts/vers/base
-          chmod +x scripts/vers/base
+          cmake -S . -B /tmp/chess-sprt/build-base -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/chess-sprt/build-base --parallel 4
+          cp /tmp/chess-sprt/build-base/chess-engine /tmp/chess-sprt/vers/base
+          chmod +x /tmp/chess-sprt/vers/base
 
       - name: Build candidate engine
         shell: bash
         run: |
+          cd "${GITHUB_WORKSPACE}"
           git checkout "${{ steps.refs.outputs.head_sha }}"
-          cmake -S . -B build-candidate -DCMAKE_BUILD_TYPE=Release
-          cmake --build build-candidate --parallel 4
-          mkdir -p scripts/vers
-          cp build-candidate/chess-engine scripts/vers/candidate
-          chmod +x scripts/vers/candidate
+          cmake -S . -B /tmp/chess-sprt/build-candidate -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/chess-sprt/build-candidate --parallel 4
+          cp /tmp/chess-sprt/build-candidate/chess-engine /tmp/chess-sprt/vers/candidate
+          chmod +x /tmp/chess-sprt/vers/candidate
 
       - name: Smoke-test engines
         shell: bash
         run: |
-          printf 'uci\nisready\nquit\n' | scripts/vers/base
-          printf 'uci\nisready\nquit\n' | scripts/vers/candidate
+          printf 'uci\nisready\nquit\n' | /tmp/chess-sprt/vers/base
+          printf 'uci\nisready\nquit\n' | /tmp/chess-sprt/vers/candidate
 
       - name: Run SPRT
         shell: bash
+        env:
+          BOOKS_DIR: /tmp/chess-sprt/books
+          VERS_DIR: /tmp/chess-sprt/vers
+          RUNS_DIR: /tmp/chess-sprt/runs
+          OPENINGS: /tmp/chess-sprt/books/8moves_v3.pgn
         run: |
+          cd "${GITHUB_WORKSPACE}"
           ./scripts/run-fastchess-sprt.sh base candidate
 
       - name: Locate latest SPRT run
@@ -118,13 +135,15 @@ jobs:
         if: always()
         shell: bash
         run: |
-          latest="$(find scripts/runs -maxdepth 1 -type d -name '*-base-vs-candidate' | sort | tail -n 1 || true)"
+          latest="$(find /tmp/chess-sprt/runs -maxdepth 1 -type d -name '*-base-vs-candidate' | sort | tail -n 1 || true)"
           echo "path=${latest}" >> "${GITHUB_OUTPUT}"
+          echo "Latest SPRT run: ${latest}"
 
       - name: Generate summary
         if: always() && steps.run_dir.outputs.path != ''
         shell: bash
         run: |
+          cd "${GITHUB_WORKSPACE}"
           ./scripts/summarize-sprt.sh "${{ steps.run_dir.outputs.path }}"
           cat "${{ steps.run_dir.outputs.path }}/summary.md" >> "${GITHUB_STEP_SUMMARY}"
 
