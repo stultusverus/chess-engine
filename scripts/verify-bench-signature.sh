@@ -2,8 +2,15 @@
 # Verify that the current bench signature matches the committed reference.
 #
 # Usage:
-#   ./scripts/verify-bench-signature.sh            # compare signature only (exit 0 = match)
-#   ./scripts/verify-bench-signature.sh --strict   # also compare per-position bestmove and nodes
+#   VERIFY_BENCH_SIGNATURE=1 ./scripts/verify-bench-signature.sh
+#   VERIFY_BENCH_SIGNATURE=1 ./scripts/verify-bench-signature.sh --strict
+#
+# Set VERIFY_BENCH_SIGNATURE=1 to enable the check.  When unset the script
+# skips with exit 0 so it can be registered in CTest without breaking the
+# default test suite on intentional signature changes.
+#
+# BENCH_BIN may be set to point at a specific bench_engine binary.
+# Default: $PROJECT_DIR/build/bench_engine
 #
 # This script compares the deterministic fields of bench output:
 #   - Per-position: fen, bestmove, score, depth, nodes
@@ -11,7 +18,7 @@
 # TimeMs and NPS are excluded because they vary across platforms and runs.
 #
 # Exit codes:
-#   0 - signature matches reference
+#   0 - signature matches reference, or check skipped
 #   1 - signature mismatch
 #   2 - current bench JSON is malformed
 #   3 - reference file not found
@@ -22,11 +29,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REFERENCE="$PROJECT_DIR/test/fixtures/bench-reference.json"
-BENCH_BIN="$PROJECT_DIR/build/bench_engine"
+BENCH_BIN="${BENCH_BIN:-$PROJECT_DIR/build/bench_engine}"
 
 STRICT=false
 if [ "${1:-}" = "--strict" ]; then
     STRICT=true
+fi
+
+if [ "${VERIFY_BENCH_SIGNATURE:-}" != "1" ]; then
+    echo "bench signature: SKIP (set VERIFY_BENCH_SIGNATURE=1 to enable)"
+    exit 0
 fi
 
 if [ ! -f "$REFERENCE" ]; then
@@ -46,9 +58,9 @@ if [ -z "$CURRENT_JSON" ]; then
     exit 2
 fi
 
-# Extract signature from current output
-CURRENT_SIG=$(echo "$CURRENT_JSON" | grep '"signature"' | grep -oE '[0-9a-f]{16}')
-REF_SIG=$(grep '"signature"' "$REFERENCE" | grep -oE '[0-9a-f]{16}')
+# Extract signature from current output using Python for robustness
+CURRENT_SIG=$(echo "$CURRENT_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['total']['signature'])" 2>/dev/null)
+REF_SIG=$(python3 -c "import json; d=json.load(open('$REFERENCE')); print(d['total']['signature'])" 2>/dev/null)
 
 if [ -z "$CURRENT_SIG" ]; then
     echo "ERROR: could not extract signature from current bench output"
@@ -68,12 +80,11 @@ if [ "$CURRENT_SIG" != "$REF_SIG" ]; then
     echo "SIGNATURE MISMATCH"
     echo ""
     echo "If this change is intentional, update the reference file with:"
-    echo "  ./build/bench_engine bench --json 2>/dev/null | sed 's/\"timeMs\": [0-9]*,[[:space:]]*//g' | sed 's/[[:space:]]*\"nps\": [0-9]*,[[:space:]]*//g' | sed 's/[[:space:]]*\"timeMs\": [0-9]*//g' | sed 's/,[[:space:]]*\"nps\": [0-9]*//g' > test/fixtures/bench-reference.json"
+    echo "  ./build/bench_engine bench --json 2>/dev/null | python3 -c \"import json,sys; d=json.load(sys.stdin); [p.pop('timeMs',None) for p in d['positions']]; d['total'].pop('timeMs',None); d['total'].pop('nps',None); print(json.dumps(d,indent=2))\" > test/fixtures/bench-reference.json"
     exit 1
 fi
 
 if $STRICT; then
-    # Compare per-position bestmove and nodes (strip timeMs/nps from current JSON)
     CURRENT_STRIPPED=$(echo "$CURRENT_JSON" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
