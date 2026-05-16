@@ -227,6 +227,38 @@ Rules:
 * For search/eval/move-ordering changes, reduced node count or unchanged tactical EPD is not sufficient evidence of improvement.
 * If SPRT is required and the result is negative, accepts H0 with a negative observed score, or otherwise fails the issue acceptance criteria, close the PR unmerged and document the result on the issue.
 
+### SPRT testing workflow
+
+When an issue or PR requires FastChess SPRT testing, use this workflow:
+
+1. **Agent prepares the environment** — create a directory under `/tmp/sprt-<issue>/` with the structure expected by `scripts/run-fastchess-sprt.sh`:
+   - `vers/` — baseline engine binary named after its version (usually `main`), and one or more test engine binaries.
+   - `books/` — copy the opening book (e.g. `books/8moves_v3.pgn`).
+   - `runs/` — empty output directory.
+   - Copy `scripts/run-fastchess-sprt.sh` into the test directory.
+   - Build baseline and test engines from clean worktrees. Copy only the `chess-engine` UCI binary into `vers/`, not `bench_engine` or test binaries.
+   - Record bench signatures for each engine with `bench_engine bench --json`.
+
+2. **Agent provides the command** — the user runs the SPRT, not the agent:
+
+Basic command:
+
+   ```bash
+   cd /tmp/sprt-<issue> && ./run-fastchess-sprt.sh main <test-engine-name>
+   ```
+
+   The script uses defaults: TC `10+0.1`, SPRT `elo0=0 elo1=10 alpha=0.10 beta=0.10`, concurrency from `nproc`/`sysctl`, openings `8moves_v3.pgn`, 64 MB hash. If non-default values are to be used, provide command with environment variable overrides as specified in `run-fastchess-sprt.sh`.
+
+3. **User runs the command** in their terminal and notifies the agent when the SPRT completes.
+
+4. **Agent inspects results** — after the user notifies, the agent:
+   - Finds the run directory under `runs/<timestamp>-main-vs-<engine>/`.
+   - Reads `metadata.txt` for engine versions and configuration.
+   - Greps `fastchess.log` for the SPRT conclusion (`SPRT … completed`, `LLR`, `Elo`, `LOS`, `Games`, `Wins`, `Losses`, `Draws`).
+   - Records the result: game count, W/L/D, score percentage, Elo ± margin, LOS, LLR, and whether H0 or H1 was accepted.
+
+5. **Agent updates the PR body** with the SPRT result and, if negative, documents it on the linked issue. Do not merge a PR with a negative SPRT result.
+
 ## Lint
 
 If available:
