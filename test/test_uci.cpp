@@ -207,14 +207,74 @@ void test_repetitionIsScoredAsDraw() {
     CHECK(contains(output, "score cp 0"));
 }
 
-void test_goRejectsMalformedNumericValues() {
-    std::string output = runEngineWithDelayedQuit(
+void test_goMalformedNumericParametersReturnBestmoveNull() {
+    // Issue #67: malformed numeric go parameters must not start a search.
+    // The engine must emit bestmove 0000 without info depth lines.
+    std::string output = runEngine(
         "position startpos\n"
-        "go depth nope movetime 1\n",
-        "0.1");
+        "go depth nope\n"
+        "quit\n");
 
     CHECK(contains(output, "[uci] illegal go depth: nope"));
-    CHECK(contains(output, "bestmove "));
+    CHECK(contains(output, "info string illegal go command"));
+    CHECK(contains(output, "bestmove 0000"));
+    CHECK(!contains(output, "info depth"));
+}
+
+void test_goMovetimeMalformedReturnsNullMove() {
+    std::string output = runEngine(
+        "position startpos\n"
+        "go movetime abc\n"
+        "quit\n");
+
+    CHECK(contains(output, "[uci] illegal go movetime: abc"));
+    CHECK(contains(output, "info string illegal go command"));
+    CHECK(contains(output, "bestmove 0000"));
+}
+
+void test_goNodesMalformedReturnsNullMove() {
+    std::string output = runEngine(
+        "position startpos\n"
+        "go nodes abc\n"
+        "quit\n");
+
+    CHECK(contains(output, "[uci] illegal go nodes: abc"));
+    CHECK(contains(output, "info string illegal go command"));
+    CHECK(contains(output, "bestmove 0000"));
+}
+
+void test_goNodesNegativeReturnsNullMove() {
+    std::string output = runEngine(
+        "position startpos\n"
+        "go nodes -1\n"
+        "quit\n");
+
+    CHECK(contains(output, "[uci] illegal go nodes: -1"));
+    CHECK(contains(output, "info string illegal go command"));
+    CHECK(contains(output, "bestmove 0000"));
+}
+
+void test_goWtimeMissingValueReturnsNullMove() {
+    std::string output = runEngine(
+        "position startpos\n"
+        "go wtime\n"
+        "quit\n");
+
+    CHECK(contains(output, "[uci] illegal go wtime: missing value"));
+    CHECK(contains(output, "info string illegal go command"));
+    CHECK(contains(output, "bestmove 0000"));
+}
+
+void test_goSearchMovesWithMalformedDepthReturnsNullMove() {
+    std::string output = runEngine(
+        "position startpos\n"
+        "go searchmoves e2e4 depth nope\n"
+        "quit\n");
+
+    CHECK(contains(output, "[uci] illegal go depth: nope"));
+    CHECK(contains(output, "info string illegal go command"));
+    CHECK(contains(output, "bestmove 0000"));
+    CHECK(!contains(output, "info depth"));
 }
 
 void test_goNodesSmallValueAccepted() {
@@ -572,11 +632,14 @@ int main() {
     RUN_TEST(searchInfoEmittedOncePerCompletedGo);
     RUN_TEST(mateScoresUseUciMateFormat);
     RUN_TEST(repetitionIsScoredAsDraw);
-    RUN_TEST(goRejectsMalformedNumericValues);
+    RUN_TEST(goMalformedNumericParametersReturnBestmoveNull);
+    RUN_TEST(goMovetimeMalformedReturnsNullMove);
+    RUN_TEST(goNodesMalformedReturnsNullMove);
+    RUN_TEST(goNodesNegativeReturnsNullMove);
+    RUN_TEST(goWtimeMissingValueReturnsNullMove);
+    RUN_TEST(goSearchMovesWithMalformedDepthReturnsNullMove);
     RUN_TEST(goNodesSmallValueAccepted);
     RUN_TEST(goNodesLargeValueAccepted);
-    RUN_TEST(goNodesNegativeRejected);
-    RUN_TEST(goNodesMalformedRejected);
     RUN_TEST(goNodesStopsAndReportsInfo);
     RUN_TEST(goSearchMovesRestrictsRootMove);
     RUN_TEST(searchMovesRestrictionSurvivesPreviousTTHit);
