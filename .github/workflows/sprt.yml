@@ -1,0 +1,132 @@
+name: SPRT
+
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Base ref or commit"
+        required: false
+        default: "main"
+        type: string
+      head_ref:
+        description: "Head ref or commit"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sprt-home-server
+  cancel-in-progress: false
+
+jobs:
+  sprt:
+    name: FastChess SPRT
+    runs-on: [self-hosted, linux, x64, sprt]
+
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'sprt-required')
+
+    container:
+      image: chess-sprt-runner:local
+      options: --cpus 4 --memory 8g
+
+    timeout-minutes: 720
+
+    env:
+      OLD_VERSION: base
+      NEW_VERSION: candidate
+      ROUNDS: "2500"
+      GAMES: "2"
+      CONCURRENCY: "2"
+      TC: "10+0.1"
+      SPRT: "elo0=0 elo1=10 alpha=0.10 beta=0.10"
+      DRAW: "movenumber=34 movecount=8 score=20"
+      RESIGN: "movecount=3 score=600"
+      HASH_MB: "64"
+      QUIET_CONSOLE: "1"
+      STARTUP_MS: "60000"
+      UCINEWGAME_MS: "60000"
+      PING_MS: "60000"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve refs
+        id: refs
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              echo "base_sha=${{ github.event.pull_request.base.sha }}" >> "${GITHUB_OUTPUT}"
+              echo "head_sha=${{ github.event.pull_request.head.sha }}" >> "${GITHUB_OUTPUT}"
+          else
+              base_ref="${{ inputs.base_ref }}"
+              head_ref="${{ inputs.head_ref }}"
+              if [[ -z "${head_ref}" ]]; then
+                  head_ref="$(git rev-parse HEAD)"
+              fi
+              git fetch origin "${base_ref}"
+              echo "base_sha=$(git rev-parse FETCH_HEAD)" >> "${GITHUB_OUTPUT}"
+              echo "head_sha=$(git rev-parse "${head_ref}")" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Build base engine
+        shell: bash
+        run: |
+          git checkout "${{ steps.refs.outputs.base_sha }}"
+          cmake -S . -B build-base -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-base --parallel 4
+          mkdir -p scripts/vers
+          cp build-base/chess-engine scripts/vers/base
+          chmod +x scripts/vers/base
+
+      - name: Build candidate engine
+        shell: bash
+        run: |
+          git checkout "${{ steps.refs.outputs.head_sha }}"
+          cmake -S . -B build-candidate -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-candidate --parallel 4
+          mkdir -p scripts/vers
+          cp build-candidate/chess-engine scripts/vers/candidate
+          chmod +x scripts/vers/candidate
+
+      - name: Smoke-test engines
+        shell: bash
+        run: |
+          printf 'uci\nisready\nquit\n' | scripts/vers/base
+          printf 'uci\nisready\nquit\n' | scripts/vers/candidate
+
+      - name: Run SPRT
+        shell: bash
+        run: |
+          ./scripts/run-fastchess-sprt.sh base candidate
+
+      - name: Locate latest SPRT run
+        id: run_dir
+        if: always()
+        shell: bash
+        run: |
+          latest="$(find scripts/runs -maxdepth 1 -type d -name '*-base-vs-candidate' | sort | tail -n 1 || true)"
+          echo "path=${latest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate summary
+        if: always() && steps.run_dir.outputs.path != ''
+        shell: bash
+        run: |
+          ./scripts/summarize-sprt.sh "${{ steps.run_dir.outputs.path }}"
+          cat "${{ steps.run_dir.outputs.path }}/summary.md" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload summary only
+        if: always() && steps.run_dir.outputs.path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprt-summary-${{ github.run_id }}
+          path: |
+            ${{ steps.run_dir.outputs.path }}/summary.md
+            ${{ steps.run_dir.outputs.path }}/metadata.txt
