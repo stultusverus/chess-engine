@@ -68,6 +68,12 @@ public:
     // Evaluate position from white's perspective (positive = white advantage)
     int evaluate(const Board& board) const;
 
+    // Parameterised evaluation: computes material, PST, and phase from the
+    // supplied EvalParams instead of from the board's incremental state.
+    // Other terms (pawn structure, mobility, etc.) use this instance's params_.
+    // Does NOT use or populate caches — intended for tuning/loss computation.
+    int evaluate(const Board& board, const EvalParams& params) const;
+
     // Access to tunable parameters (non-const for future tuning tools)
     EvalParams& params() { return params_; }
     const EvalParams& params() const { return params_; }
@@ -99,6 +105,11 @@ private:
     int pieceSquare(const Board& board, int phase) const;
     int gamePhase(const Board& board) const;
     int tapered(int mgScore, int egScore, int phase) const;
+
+    // Parameterised helpers: compute from explicit EvalParams, not board state
+    int material(const Board& board, const EvalParams& params) const;
+    int pieceSquare(const Board& board, const EvalParams& params, int phase) const;
+    int gamePhase(const Board& board, const EvalParams& params) const;
     int cachedPawnStructure(const Board& board) const;
     int pawnStructure(const Board& board) const;
     int mobility(const Board& board, int phase) const;
