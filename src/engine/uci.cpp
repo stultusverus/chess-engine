@@ -298,6 +298,7 @@ void UCI::handleGo(const std::string& line) {
     uint64_t nodeLimit = 0;
     bool infinite = false;
     bool unsupportedPonder = false;
+    bool parseError = false;
     std::vector<Move> searchMoves;
 
     std::vector<std::string> tokens;
@@ -307,11 +308,13 @@ void UCI::handleGo(const std::string& line) {
     auto readValue = [&](size_t& i, const std::string& name, int& target) {
         if (i + 1 >= tokens.size()) {
             std::cerr << "[uci] illegal go " << name << ": missing value" << std::endl;
+            parseError = true;
             return;
         }
         auto value = parseInt(tokens[++i]);
         if (!value) {
             std::cerr << "[uci] illegal go " << name << ": " << tokens[i] << std::endl;
+            parseError = true;
             return;
         }
         target = *value;
@@ -320,11 +323,13 @@ void UCI::handleGo(const std::string& line) {
     auto readUnsignedValue = [&](size_t& i, const std::string& name, uint64_t& target) {
         if (i + 1 >= tokens.size()) {
             std::cerr << "[uci] illegal go " << name << ": missing value" << std::endl;
+            parseError = true;
             return;
         }
         auto value = parseUint64(tokens[++i]);
         if (!value) {
             std::cerr << "[uci] illegal go " << name << ": " << tokens[i] << std::endl;
+            parseError = true;
             return;
         }
         target = *value;
@@ -372,6 +377,12 @@ void UCI::handleGo(const std::string& line) {
         } else {
             std::cerr << "[uci] unsupported go token: " << token << std::endl;
         }
+    }
+
+    if (parseError) {
+        std::cout << "info string illegal go command" << std::endl;
+        std::cout << "bestmove 0000" << std::endl;
+        return;
     }
 
     if (depth < 0) depth = 0;
