@@ -36,8 +36,8 @@ bool hasNonPawnMaterial(const Board& board, Color side) {
 static constexpr int LMP_MAX_DEPTH = 3;
 
 static int lmpThreshold(int depth) {
-    // depth 1: 5, depth 2: 8, depth 3: 13
-    return 4 + depth * depth;
+    // depth 1: 4, depth 2: 7, depth 3: 12
+    return 3 + depth * depth;
 }
 
 } // namespace
