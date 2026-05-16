@@ -4,6 +4,7 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 namespace chess {
 
@@ -151,11 +152,9 @@ TuningDatasetSummary summarizeDataset(const std::string& path) {
         return summary;
 
     std::string line;
-    int lineNum = 0;
-    std::vector<std::string> seenFens;
+    std::unordered_set<std::string> seenFens;
 
     while (std::getline(file, line)) {
-        lineNum++;
         summary.totalLines++;
 
         if (!line.empty() && line.back() == '\r')
@@ -179,17 +178,16 @@ TuningDatasetSummary summarizeDataset(const std::string& path) {
         std::string fen = line.substr(0, pos);
         std::string result = line.substr(pos + 1);
 
-        double target;
-        if (result == "1-0") {
-            target = 1.0;
-            summary.resultWin++;
-        } else if (result == "1/2-1/2") {
-            target = 0.5;
-            summary.resultDraw++;
-        } else if (result == "0-1") {
-            target = 0.0;
-            summary.resultLoss++;
-        } else {
+        // Validate result token first, then FEN. Only count result
+        // distribution after both are valid so summary fields stay consistent.
+        int resultType = -1; // 0=loss, 1=draw, 2=win
+        if (result == "0-1")
+            resultType = 0;
+        else if (result == "1/2-1/2")
+            resultType = 1;
+        else if (result == "1-0")
+            resultType = 2;
+        else {
             summary.invalidResultCount++;
             summary.warningCount++;
             continue;
@@ -202,20 +200,19 @@ TuningDatasetSummary summarizeDataset(const std::string& path) {
             continue;
         }
 
-        // Track side to move
+        // Both FEN and result are valid — now update distribution counters
+        if (resultType == 0) summary.resultLoss++;
+        else if (resultType == 1) summary.resultDraw++;
+        else summary.resultWin++;
+
         if (board.sideToMove() == WHITE)
             summary.sideWhite++;
         else
             summary.sideBlack++;
 
-        // Duplicate detection (simple vector scan; small datasets)
-        for (const auto& seen : seenFens) {
-            if (seen == fen) {
-                summary.duplicateFenCount++;
-                break;
-            }
-        }
-        seenFens.push_back(fen);
+        if (seenFens.count(fen))
+            summary.duplicateFenCount++;
+        seenFens.insert(fen);
 
         summary.parsedPositions++;
     }
