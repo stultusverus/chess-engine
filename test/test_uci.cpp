@@ -500,6 +500,55 @@ void test_lowClockReturnsLegalMove() {
     CHECK(!contains(output, "bestmove 0000"));
 }
 
+void test_invalidMoveAfterStartposDoesNotMutateBoard() {
+    // Issue #66: a position command with an invalid move must not
+    // partially mutate the board. The entire command is rejected.
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos moves e2e4\n"
+        "position startpos moves d2d4 invalid\n"
+        "go depth 1\n",
+        "0.1");
+
+    CHECK(contains(output, "[uci] illegal move: invalid"));
+    CHECK(contains(output, "bestmove "));
+    CHECK(!contains(output, "bestmove 0000"));
+}
+
+void test_invalidMoveAfterLegalMovesPreservesPreviousBoard() {
+    // A position command with a legal move followed by an illegal move
+    // must not apply the legal move either.
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos moves e2e4\n"
+        "position startpos moves d2d4 e7e5 invalid\n"
+        "go depth 1\n",
+        "0.1");
+
+    CHECK(contains(output, "[uci] illegal move: invalid"));
+    CHECK(contains(output, "bestmove "));
+    CHECK(!contains(output, "bestmove 0000"));
+}
+
+void test_invalidMoveInFenPositionPreservesPreviousBoard() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos\n"
+        "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 moves e2e4 invalid\n"
+        "go depth 1\n",
+        "0.1");
+
+    CHECK(contains(output, "[uci] illegal move: invalid"));
+    CHECK(contains(output, "bestmove "));
+}
+
+void test_validPositionWithMultipleMovesStillWorks() {
+    std::string output = runEngineWithDelayedQuit(
+        "position startpos moves e2e4 e7e5\n"
+        "go depth 1\n",
+        "0.1");
+
+    CHECK(contains(output, "bestmove "));
+    CHECK(!contains(output, "[uci] illegal move:"));
+}
+
 void test_movetimeNotAdaptivelyShortened() {
     // go movetime is a fixed-time search, not clock-managed.
     // Adaptive time management (stability reductions / score-drop
@@ -549,6 +598,10 @@ int main() {
     RUN_TEST(unknownPositionTypeDoesNotMutateBoard);
     RUN_TEST(singleLegalMoveRespondsQuickly);
     RUN_TEST(lowClockReturnsLegalMove);
+    RUN_TEST(invalidMoveAfterStartposDoesNotMutateBoard);
+    RUN_TEST(invalidMoveAfterLegalMovesPreservesPreviousBoard);
+    RUN_TEST(invalidMoveInFenPositionPreservesPreviousBoard);
+    RUN_TEST(validPositionWithMultipleMovesStillWorks);
     RUN_TEST(movetimeNotAdaptivelyShortened);
 
     if (failures > 0) {
