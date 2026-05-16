@@ -1,19 +1,28 @@
-name: SPRT runner diagnostics
+name: SPRT container diagnostics
 
 on:
   workflow_dispatch:
 
 jobs:
-  diag-host:
+  diag-container:
     runs-on: [self-hosted, linux, x64, sprt]
+
+    container:
+      image: ghcr.io/stultusverus/chess-sprt-runner:latest
+      options: --cpus 1 --memory 1g
+
     steps:
-      - name: Host identity
+      - name: Container identity and file-command access
         run: |
-          echo "Host user:"
+          echo "Container user:"
           id
-          whoami
+          whoami || true
           echo
-          echo "Runner temp/workspace:"
+          echo "Paths:"
           echo "RUNNER_TEMP=$RUNNER_TEMP"
           echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          ls -ld "$RUNNER_TEMP" "$GITHUB_WORKSPACE" || true
+          ls -ld /__w /__w/_temp /__w/_temp/_runner_file_commands || true
+          echo
+          echo "Write tests:"
+          touch "$RUNNER_TEMP/manual-write-test"
+          echo "manual write ok"
