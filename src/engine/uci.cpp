@@ -222,8 +222,9 @@ void UCI::handlePosition(const std::string& line) {
     std::string cmd, posType;
     ss >> cmd >> posType; // skip "position"
 
+    Board candidate;
     if (posType == "startpos") {
-        board_.setFen(STARTPOS_FEN);
+        candidate.setFen(STARTPOS_FEN);
         std::string moves;
         ss >> moves; // consume "moves" keyword
     } else if (posType == "fen") {
@@ -238,7 +239,7 @@ void UCI::handlePosition(const std::string& line) {
             if (!fen.empty()) fen += ' ';
             fen += token;
         }
-        if (!board_.setFen(fen)) {
+        if (!candidate.setFen(fen)) {
             std::cerr << "[uci] illegal fen: " << fen << std::endl;
             return;
         }
@@ -260,30 +261,32 @@ void UCI::handlePosition(const std::string& line) {
         if (token == "moves") continue;
         if (token.size() != 4 && token.size() != 5) {
             std::cerr << "[uci] illegal move: " << token << std::endl;
-            break;
+            return;
         }
         Square from = stringToSquare(token.substr(0, 2));
         Square to = stringToSquare(token.substr(2, 2));
         if (from == SQ_NONE || to == SQ_NONE) {
             std::cerr << "[uci] illegal move: " << token << std::endl;
-            break;
+            return;
         }
         PieceType promo = PIECE_TYPE_NB;
         if (token.size() == 5) {
             promo = charToPieceType(token[4]);
             if (promo == PIECE_TYPE_NB) {
                 std::cerr << "[uci] illegal move: " << token << std::endl;
-                break;
+                return;
             }
         }
 
         Move m(from, to, promo);
         UndoInfo undo;
-        if (!board_.makeMove(m, undo)) {
+        if (!candidate.makeMove(m, undo)) {
             std::cerr << "[uci] illegal move: " << token << std::endl;
-            break;
+            return;
         }
     }
+
+    board_ = candidate;
 }
 
 void UCI::handleGo(const std::string& line) {
