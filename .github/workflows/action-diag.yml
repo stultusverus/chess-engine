@@ -1,0 +1,19 @@
+name: SPRT runner diagnostics
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diag-host:
+    runs-on: [self-hosted, linux, x64, sprt]
+    steps:
+      - name: Host identity
+        run: |
+          echo "Host user:"
+          id
+          whoami
+          echo
+          echo "Runner temp/workspace:"
+          echo "RUNNER_TEMP=$RUNNER_TEMP"
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          ls -ld "$RUNNER_TEMP" "$GITHUB_WORKSPACE" || true
