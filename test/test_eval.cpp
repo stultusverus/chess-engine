@@ -252,6 +252,51 @@ void test_evalCachePreservesScoresAcrossMakeUnmake() {
     CHECK(eval.evaluate(b) == startScore);
 }
 
+void test_cacheReturnsConsistentScoreForSameParams() {
+    chess::Eval localEval;
+    chess::Board b("7k/1p6/1p6/8/8/8/8/7K w - - 0 1");
+    int score1 = localEval.evaluate(b);
+    int score2 = localEval.evaluate(b);
+    CHECK(score1 == score2);
+}
+
+void test_clearCachesInvalidatesStaleEntries() {
+    // Position with doubled black pawns — score should change when the
+    // doubled-pawn penalty is modified, but only after clearing caches.
+    chess::Eval localEval;
+    chess::Board b("7k/1p6/1p6/8/8/8/8/7K w - - 0 1");
+
+    int scoreBefore = localEval.evaluate(b);
+    // Force cache population
+    localEval.evaluate(b);
+
+    // Mutate doubled-pawn penalty and clear caches
+    localEval.params().doubledPawnPenalty = 50;
+    localEval.clearCaches();
+    int scoreAfterClear = localEval.evaluate(b);
+
+    // The doubled pawn penalty changed significantly, so the score must differ
+    CHECK(scoreAfterClear != scoreBefore);
+}
+
+void test_clearCachesClearsBothPawnAndEvalCache() {
+    // Same position evaluated, then params changed, then caches cleared.
+    // The new score must reflect the changed params, proving both
+    // pawn cache and eval cache were invalidated.
+    chess::Eval localEval;
+    chess::Board b("7k/1p6/1p6/8/8/8/8/7K w - - 0 1");
+
+    int score1 = localEval.evaluate(b);
+    localEval.params().doubledPawnPenalty = 40;
+    localEval.clearCaches();
+    int score2 = localEval.evaluate(b);
+    CHECK(score1 != score2);
+
+    // Second evaluation with same (changed) params returns consistent result
+    int score3 = localEval.evaluate(b);
+    CHECK(score2 == score3);
+}
+
 void test_isolatedRookFile() {
     // Isolated pawn on rook file penalized half as much as center file
     // (PST values differ, so combined eval favors a-file in this endgame)
@@ -286,6 +331,9 @@ int main() {
     RUN_TEST(incrementalEvalStateMatchesRecompute);
     RUN_TEST(pawnHashTracksOnlyPawns);
     RUN_TEST(evalCachePreservesScoresAcrossMakeUnmake);
+    RUN_TEST(cacheReturnsConsistentScoreForSameParams);
+    RUN_TEST(clearCachesInvalidatesStaleEntries);
+    RUN_TEST(clearCachesClearsBothPawnAndEvalCache);
     RUN_TEST(isolatedRookFile);
 
     if (failures > 0) {

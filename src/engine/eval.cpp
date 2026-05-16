@@ -500,4 +500,11 @@ EvalTrace Eval::trace(const Board& board) const {
     return t;
 }
 
+void Eval::clearCaches() {
+    for (auto& entry : pawnCache_)
+        entry.valid = false;
+    for (auto& entry : evalCache_)
+        entry.valid = false;
+}
+
 } // namespace chess
