@@ -32,7 +32,7 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'sprt-required')
 
     container:
-      image: chess-sprt-runner:local
+      image: ghcr.io/stultusverus/chess-sprt-runner:latest
       options: --cpus 4 --memory 8g
 
     timeout-minutes: 720
