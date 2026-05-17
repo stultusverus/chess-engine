@@ -71,7 +71,9 @@ public:
     // Parameterised evaluation: computes material, PST, and phase from the
     // supplied EvalParams instead of from the board's incremental state.
     // Other terms (pawn structure, mobility, etc.) use this instance's params_.
-    // Does NOT use or populate caches — intended for tuning/loss computation.
+    // Does NOT use or populate caches.  Saves/restores params_ internally so
+    // subsequent ordinary evaluate() calls are unaffected.
+    // Intended for tuning/loss computation.
     int evaluate(const Board& board, const EvalParams& params);
 
     // Access to tunable parameters (non-const for future tuning tools)

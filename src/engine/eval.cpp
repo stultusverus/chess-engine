@@ -468,6 +468,7 @@ int Eval::evaluate(const Board& board) const {
 }
 
 int Eval::evaluate(const Board& board, const EvalParams& params) {
+    EvalParams saved = params_;
     params_ = params;
 
     int phase = gamePhase(board, params);
@@ -476,6 +477,7 @@ int Eval::evaluate(const Board& board, const EvalParams& params) {
                 bishopPair(board, phase) + rookOnFile(board, phase) +
                 kingSafety(board, phase) + tempo(board);
 
+    params_ = saved;
     return score;
 }
 
