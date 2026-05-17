@@ -2,9 +2,12 @@
 #include "engine/attacks.h"
 #include "engine/eval.h"
 #include "engine/movegen.h"
+#include "engine/tune.h"
 #include "engine/types.h"
-#include <iostream>
 #include <cmath>
+#include <cstdio>
+#include <fstream>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -297,6 +300,105 @@ void test_clearCachesClearsBothPawnAndEvalCache() {
     CHECK(score2 == score3);
 }
 
+// ---------- parameter sensitivity (issue #71) ----------
+
+void test_knightValueAffectsParameterisedScore() {
+    chess::Eval localEval;
+    chess::Board b("4k3/8/8/8/8/8/5N2/4K3 w - - 0 1");
+
+    chess::EvalParams params;
+    int scoreDefault = localEval.evaluate(b, params);
+
+    params.knightValue = 500;
+    int scoreChanged = localEval.evaluate(b, params);
+
+    CHECK(scoreChanged > scoreDefault);
+}
+
+void test_pstEntryAffectsParameterisedScore() {
+    chess::Eval localEval;
+    chess::Board b("4k3/8/8/8/3N4/8/8/4K3 w - - 0 1");
+
+    chess::EvalParams params;
+    int scoreDefault = localEval.evaluate(b, params);
+
+    params.knightMg[chess::D4] += 100;
+    int scoreChanged = localEval.evaluate(b, params);
+
+    CHECK(scoreChanged > scoreDefault);
+}
+
+void test_phaseIncAffectsParameterisedEvaluation() {
+    chess::Board b("4k3/8/8/8/8/8/8/R3K3 w - - 0 1");
+
+    chess::EvalParams params;
+    chess::Eval eval;
+
+    int scoreDefault = eval.evaluate(b, params);
+
+    params.phaseInc[chess::ROOK] = 12;
+    int scoreChanged = eval.evaluate(b, params);
+
+    CHECK(scoreChanged != scoreDefault);
+}
+
+void test_knightValueAffectsTuningLoss() {
+    std::string tmpPath = "test_tune_param_sens.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "4k3/8/8/8/8/8/5N2/4K3 w - - 0 1 1-0\n";
+    }
+    auto ds = chess::TuningDataset::load(tmpPath, false);
+    CHECK(ds.has_value());
+
+    chess::EvalParams params;
+    double lossDefault = chess::computeLoss(*ds, params, 1.0);
+
+    params.knightValue = 500;
+    double lossChanged = chess::computeLoss(*ds, params, 1.0);
+
+    CHECK(lossDefault != lossChanged);
+    std::remove(tmpPath.c_str());
+}
+
+void test_pstChangeAffectsTuningLoss() {
+    std::string tmpPath = "test_tune_pst_sens.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "4k3/8/8/8/3N4/8/8/4K3 w - - 0 1 1-0\n";
+    }
+    auto ds = chess::TuningDataset::load(tmpPath, false);
+    CHECK(ds.has_value());
+
+    chess::EvalParams params;
+    double lossDefault = chess::computeLoss(*ds, params, 1.0);
+
+    params.knightMg[chess::D4] += 100;
+    double lossChanged = chess::computeLoss(*ds, params, 1.0);
+
+    CHECK(lossDefault != lossChanged);
+    std::remove(tmpPath.c_str());
+}
+
+void test_phaseIncChangeAffectsTuningLoss() {
+    std::string tmpPath = "test_tune_phase_sens.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "r3k3/8/8/8/8/8/8/4K3 w - - 0 1 1-0\n";
+    }
+    auto ds = chess::TuningDataset::load(tmpPath, false);
+    CHECK(ds.has_value());
+
+    chess::EvalParams params;
+    double lossDefault = chess::computeLoss(*ds, params, 1.0);
+
+    params.phaseInc[chess::ROOK] = 4;
+    double lossChanged = chess::computeLoss(*ds, params, 1.0);
+
+    CHECK(lossDefault != lossChanged);
+    std::remove(tmpPath.c_str());
+}
+
 void test_isolatedRookFile() {
     // Isolated pawn on rook file penalized half as much as center file
     // (PST values differ, so combined eval favors a-file in this endgame)
@@ -334,6 +436,12 @@ int main() {
     RUN_TEST(cacheReturnsConsistentScoreForSameParams);
     RUN_TEST(clearCachesInvalidatesStaleEntries);
     RUN_TEST(clearCachesClearsBothPawnAndEvalCache);
+    RUN_TEST(knightValueAffectsParameterisedScore);
+    RUN_TEST(pstEntryAffectsParameterisedScore);
+    RUN_TEST(phaseIncAffectsParameterisedEvaluation);
+    RUN_TEST(knightValueAffectsTuningLoss);
+    RUN_TEST(pstChangeAffectsTuningLoss);
+    RUN_TEST(phaseIncChangeAffectsTuningLoss);
     RUN_TEST(isolatedRookFile);
 
     if (failures > 0) {
