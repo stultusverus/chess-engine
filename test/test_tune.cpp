@@ -250,6 +250,123 @@ static void test_optimize_k_deterministic() {
     std::remove(tmpPath.c_str());
 }
 
+// ---------- dataset summary tests ----------
+
+static void test_summary_valid_dataset() {
+    std::string tmpPath = "test_tune_summary_valid.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 1/2-1/2\n";
+        out << "8/8/8/4k3/4P3/4K3/8/8 w - - 0 1 1-0\n";
+        out << "8/8/8/4k3/4p3/4K3/8/8 w - - 0 1 0-1\n";
+    }
+    auto s = chess::summarizeDataset(tmpPath);
+    CHECK(s.totalLines == 3);
+    CHECK(s.parsedPositions == 3);
+    CHECK(s.resultWin == 1);
+    CHECK(s.resultDraw == 1);
+    CHECK(s.resultLoss == 1);
+    CHECK(s.invalidFenCount == 0);
+    CHECK(s.invalidResultCount == 0);
+    CHECK(s.warningCount == 0);
+    std::remove(tmpPath.c_str());
+}
+
+static void test_summary_blank_lines_and_comments() {
+    std::string tmpPath = "test_tune_summary_blanks.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "\n";
+        out << "# comment\n";
+        out << "   # indented comment\n";
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 1-0\n";
+    }
+    auto s = chess::summarizeDataset(tmpPath);
+    CHECK(s.totalLines == 4);
+    CHECK(s.skippedBlankComment == 3);
+    CHECK(s.parsedPositions == 1);
+    std::remove(tmpPath.c_str());
+}
+
+static void test_summary_invalid_result_token() {
+    std::string tmpPath = "test_tune_summary_badresult.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 invalid\n";
+    }
+    auto s = chess::summarizeDataset(tmpPath);
+    CHECK(s.totalLines == 1);
+    CHECK(s.parsedPositions == 0);
+    CHECK(s.invalidResultCount == 1);
+    CHECK(s.warningCount == 1);
+    std::remove(tmpPath.c_str());
+}
+
+static void test_summary_invalid_fen() {
+    std::string tmpPath = "test_tune_summary_badfen.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "not a fen 1-0\n";
+    }
+    auto s = chess::summarizeDataset(tmpPath);
+    CHECK(s.totalLines == 1);
+    CHECK(s.parsedPositions == 0);
+    CHECK(s.invalidFenCount == 1);
+    CHECK(s.warningCount == 1);
+    std::remove(tmpPath.c_str());
+}
+
+static void test_summary_missing_result() {
+    std::string tmpPath = "test_tune_summary_noresult.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\n";
+    }
+    auto s = chess::summarizeDataset(tmpPath);
+    CHECK(s.totalLines == 1);
+    CHECK(s.parsedPositions == 0);
+    CHECK(s.invalidResultCount == 1);
+    std::remove(tmpPath.c_str());
+}
+
+static void test_summary_side_to_move() {
+    std::string tmpPath = "test_tune_summary_stm.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 1-0\n";
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1 0-1\n";
+    }
+    auto s = chess::summarizeDataset(tmpPath);
+    CHECK(s.sideWhite == 1);
+    CHECK(s.sideBlack == 1);
+    std::remove(tmpPath.c_str());
+}
+
+static void test_summary_tab_separated() {
+    std::string tmpPath = "test_tune_summary_tabs.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\t1-0\n";
+    }
+    auto s = chess::summarizeDataset(tmpPath);
+    CHECK(s.parsedPositions == 1);
+    CHECK(s.resultWin == 1);
+    std::remove(tmpPath.c_str());
+}
+
+static void test_summary_duplicate_fen() {
+    std::string tmpPath = "test_tune_summary_dup.tmp";
+    {
+        std::ofstream out(tmpPath);
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 1-0\n";
+        out << "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 1/2-1/2\n";
+    }
+    auto s = chess::summarizeDataset(tmpPath);
+    CHECK(s.parsedPositions == 2);
+    CHECK(s.duplicateFenCount == 1);
+    std::remove(tmpPath.c_str());
+}
+
 // ---------- fixture smoke test ----------
 
 static void test_fixture_loads_clean() {
@@ -278,6 +395,14 @@ int main() {
     RUN_TEST(loss_empty_dataset);
     RUN_TEST(optimize_k_produces_result);
     RUN_TEST(optimize_k_deterministic);
+    RUN_TEST(summary_valid_dataset);
+    RUN_TEST(summary_blank_lines_and_comments);
+    RUN_TEST(summary_invalid_result_token);
+    RUN_TEST(summary_invalid_fen);
+    RUN_TEST(summary_missing_result);
+    RUN_TEST(summary_side_to_move);
+    RUN_TEST(summary_tab_separated);
+    RUN_TEST(summary_duplicate_fen);
     RUN_TEST(fixture_loads_clean);
 
     if (failures > 0) {

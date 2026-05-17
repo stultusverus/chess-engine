@@ -529,7 +529,42 @@ int runEvalTrace(const std::string& fen, bool json) {
     return 0;
 }
 
-int runTuneEval(const std::string& path, bool json) {
+int runTuneEval(const std::string& path, bool json, bool summary) {
+    if (summary) {
+        auto s = chess::summarizeDataset(path);
+
+        if (json) {
+            std::cout << "{\n";
+            std::cout << "  \"totalLines\": " << s.totalLines << ",\n";
+            std::cout << "  \"parsedPositions\": " << s.parsedPositions << ",\n";
+            std::cout << "  \"skippedBlankComment\": " << s.skippedBlankComment << ",\n";
+            std::cout << "  \"invalidFenCount\": " << s.invalidFenCount << ",\n";
+            std::cout << "  \"invalidResultCount\": " << s.invalidResultCount << ",\n";
+            std::cout << "  \"warningCount\": " << s.warningCount << ",\n";
+            std::cout << "  \"resultDistribution\": {\"win\": " << s.resultWin
+                      << ", \"draw\": " << s.resultDraw
+                      << ", \"loss\": " << s.resultLoss << "},\n";
+            std::cout << "  \"sideToMove\": {\"white\": " << s.sideWhite
+                      << ", \"black\": " << s.sideBlack << "},\n";
+            std::cout << "  \"duplicateFenCount\": " << s.duplicateFenCount << '\n';
+            std::cout << "}\n";
+        } else {
+            std::cout << "totalLines " << s.totalLines << '\n';
+            std::cout << "parsedPositions " << s.parsedPositions << '\n';
+            std::cout << "skippedBlankComment " << s.skippedBlankComment << '\n';
+            std::cout << "invalidFen " << s.invalidFenCount << '\n';
+            std::cout << "invalidResult " << s.invalidResultCount << '\n';
+            std::cout << "warnings " << s.warningCount << '\n';
+            std::cout << "resultWin " << s.resultWin << '\n';
+            std::cout << "resultDraw " << s.resultDraw << '\n';
+            std::cout << "resultLoss " << s.resultLoss << '\n';
+            std::cout << "sideWhite " << s.sideWhite << '\n';
+            std::cout << "sideBlack " << s.sideBlack << '\n';
+            std::cout << "duplicateFen " << s.duplicateFenCount << '\n';
+        }
+        return 0;
+    }
+
     chess::EvalParams params;
     auto ds = chess::TuningDataset::load(path, false);
 
@@ -580,11 +615,14 @@ int main(int argc, char** argv) {
     std::string traceFen;
     bool tuneMode = false;
     std::string tunePath;
+    bool tuneSummary = false;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--json") {
             json = true;
+        } else if (arg == "--summary") {
+            tuneSummary = true;
         } else if (arg == "bench") {
             benchMode = true;
         } else if (arg == "trace") {
@@ -593,7 +631,7 @@ int main(int argc, char** argv) {
             std::vector<std::string> fenParts;
             while (i + 1 < argc) {
                 std::string next = argv[i + 1];
-                if (next == "--json" || next == "bench" || next == "trace" || next == "tune-eval") break;
+                if (next == "--json" || next == "--summary" || next == "bench" || next == "trace" || next == "tune-eval") break;
                 fenParts.push_back(next);
                 i++;
             }
@@ -605,7 +643,7 @@ int main(int argc, char** argv) {
             tuneMode = true;
             if (i + 1 < argc) {
                 std::string next = argv[i + 1];
-                if (next != "--json" && next != "bench" && next != "trace" && next != "tune-eval") {
+                if (next != "--json" && next != "--summary" && next != "bench" && next != "trace" && next != "tune-eval") {
                     tunePath = next;
                     i++;
                 }
@@ -628,7 +666,7 @@ int main(int argc, char** argv) {
             std::cerr << "usage: bench_engine tune-eval <path> [--json]\n";
             return 1;
         }
-        return runTuneEval(tunePath, json);
+        return runTuneEval(tunePath, json, tuneSummary);
     }
 
     if (benchMode)

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 namespace chess {
 
@@ -142,6 +143,81 @@ KOptimizeResult optimizeK(const TuningDataset& dataset, const EvalParams& params
     result.bestK = bestK;
     result.bestLoss = computeLoss(dataset, params, bestK);
     return result;
+}
+
+TuningDatasetSummary summarizeDataset(const std::string& path) {
+    TuningDatasetSummary summary;
+    std::ifstream file(path);
+    if (!file.is_open())
+        return summary;
+
+    std::string line;
+    std::unordered_set<std::string> seenFens;
+
+    while (std::getline(file, line)) {
+        summary.totalLines++;
+
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        line = trim(line);
+        for (auto& c : line)
+            if (c == '\t') c = ' ';
+
+        if (line.empty() || line[0] == '#') {
+            summary.skippedBlankComment++;
+            continue;
+        }
+
+        auto pos = line.rfind(' ');
+        if (pos == std::string::npos) {
+            summary.invalidResultCount++;
+            summary.warningCount++;
+            continue;
+        }
+
+        std::string fen = line.substr(0, pos);
+        std::string result = line.substr(pos + 1);
+
+        // Validate result token first, then FEN. Only count result
+        // distribution after both are valid so summary fields stay consistent.
+        int resultType = -1; // 0=loss, 1=draw, 2=win
+        if (result == "0-1")
+            resultType = 0;
+        else if (result == "1/2-1/2")
+            resultType = 1;
+        else if (result == "1-0")
+            resultType = 2;
+        else {
+            summary.invalidResultCount++;
+            summary.warningCount++;
+            continue;
+        }
+
+        Board board;
+        if (!board.setFen(fen)) {
+            summary.invalidFenCount++;
+            summary.warningCount++;
+            continue;
+        }
+
+        // Both FEN and result are valid — now update distribution counters
+        if (resultType == 0) summary.resultLoss++;
+        else if (resultType == 1) summary.resultDraw++;
+        else summary.resultWin++;
+
+        if (board.sideToMove() == WHITE)
+            summary.sideWhite++;
+        else
+            summary.sideBlack++;
+
+        if (seenFens.count(fen))
+            summary.duplicateFenCount++;
+        seenFens.insert(fen);
+
+        summary.parsedPositions++;
+    }
+
+    return summary;
 }
 
 } // namespace chess
