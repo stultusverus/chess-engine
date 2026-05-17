@@ -79,6 +79,12 @@ public:
     // Access to tunable parameters (non-const for future tuning tools)
     EvalParams& params() { return params_; }
     const EvalParams& params() const { return params_; }
+
+    // Clear pawn and evaluation caches.  Callers that mutate params() on an
+    // existing Eval instance must call clearCaches() before the next evaluate()
+    // to prevent stale cached scores keyed on the old parameter set.
+    void clearCaches();
+
     // Trace: evaluate with per-term breakdown (bypasses caches for accuracy)
     EvalTrace trace(const Board& board) const;
 
