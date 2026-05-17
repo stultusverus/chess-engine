@@ -14,6 +14,25 @@ on:
         description: "Head ref or commit"
         required: false
         type: string
+      test_mode:
+        description: "SPRT mode"
+        required: false
+        default: "prove-gain"
+        type: choice
+        options:
+          - prove-gain
+          - non-regression
+          - custom
+      sprt:
+        description: "Custom FastChess SPRT args; used only when test_mode=custom"
+        required: false
+        default: ""
+        type: string
+      rounds:
+        description: "FastChess rounds"
+        required: false
+        default: "1500"
+        type: string
 
 permissions:
   contents: read
@@ -81,7 +100,56 @@ jobs:
               echo "base_sha=$(git rev-parse FETCH_HEAD)" >> "${GITHUB_OUTPUT}"
               echo "head_sha=$(git rev-parse "${head_ref}")" >> "${GITHUB_OUTPUT}"
           fi
-    
+
+      - name: Resolve SPRT mode
+        id: sprt_mode
+        shell: bash
+        run: |
+          mode="prove-gain"
+          custom_sprt=""
+          rounds="1500"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              mode="${{ inputs.test_mode }}"
+              custom_sprt="${{ inputs.sprt }}"
+              rounds="${{ inputs.rounds }}"
+          else
+              labels='${{ join(github.event.pull_request.labels.*.name, ',') }}'
+              if [[ ",${labels}," == *",sprt-non-regression,"* ]]; then
+                  mode="non-regression"
+              elif [[ ",${labels}," == *",sprt-prove-gain,"* ]]; then
+                  mode="prove-gain"
+              fi
+          fi
+
+          case "${mode}" in
+              prove-gain)
+                  sprt="elo0=0 elo1=10 alpha=0.10 beta=0.10"
+                  ;;
+              non-regression)
+                  sprt="elo0=-5 elo1=0 alpha=0.05 beta=0.05"
+                  ;;
+              custom)
+                  if [[ -z "${custom_sprt}" ]]; then
+                      echo "custom mode requires non-empty sprt input" >&2
+                      exit 2
+                  fi
+                  sprt="${custom_sprt}"
+                  ;;
+              *)
+                  echo "unknown SPRT mode: ${mode}" >&2
+                  exit 2
+                  ;;
+          esac
+
+          echo "mode=${mode}" >> "${GITHUB_OUTPUT}"
+          echo "sprt=${sprt}" >> "${GITHUB_OUTPUT}"
+          echo "rounds=${rounds}" >> "${GITHUB_OUTPUT}"
+
+          echo "SPRT mode: ${mode}"
+          echo "SPRT args: ${sprt}"
+          echo "Rounds: ${rounds}"
+
       - name: Prepare SPRT work directory
         shell: bash
         run: |
@@ -126,6 +194,9 @@ jobs:
           VERS_DIR: /tmp/chess-sprt/vers
           RUNS_DIR: /tmp/chess-sprt/runs
           OPENINGS: /tmp/chess-sprt/books/8moves_v3.pgn
+          SPRT: ${{ steps.sprt_mode.outputs.sprt }}
+          ROUNDS: ${{ steps.sprt_mode.outputs.rounds }}
+          SPRT_MODE: ${{ steps.sprt_mode.outputs.mode }}
         run: |
           cd "${GITHUB_WORKSPACE}"
           ./scripts/run-fastchess-sprt.sh base candidate
