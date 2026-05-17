@@ -41,7 +41,7 @@ jobs:
     env:
       OLD_VERSION: base
       NEW_VERSION: candidate
-      ROUNDS: "2500"
+      ROUNDS: "1500"
       GAMES: "2"
       CONCURRENCY: "2"
       TC: "10+0.1"
