@@ -6,3 +6,4 @@ bench/latest-vs-old.pgn
 bench/latest-vs-old-config.json
 .claude/
 .remember/
+.cache/
