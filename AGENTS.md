@@ -241,23 +241,46 @@ When an issue or PR requires FastChess SPRT testing, use this workflow:
 
 2. **Agent provides the command** — the user runs the SPRT, not the agent:
 
-Basic command:
-
    ```bash
    cd /tmp/sprt-<issue> && ./run-fastchess-sprt.sh main <test-engine-name>
    ```
-
-   The script uses defaults: TC `10+0.1`, SPRT `elo0=0 elo1=10 alpha=0.10 beta=0.10`, concurrency from `nproc`/`sysctl`, openings `8moves_v3.pgn`, 64 MB hash. If non-default values are to be used, provide command with environment variable overrides as specified in `run-fastchess-sprt.sh`.
 
 3. **User runs the command** in their terminal and notifies the agent when the SPRT completes.
 
 4. **Agent inspects results** — after the user notifies, the agent:
    - Finds the run directory under `runs/<timestamp>-main-vs-<engine>/`.
    - Reads `metadata.txt` for engine versions and configuration.
-   - Greps `fastchess.log` for the SPRT conclusion (`SPRT … completed`, `LLR`, `Elo`, `LOS`, `Games`, `Wins`, `Losses`, `Draws`).
-   - Records the result: game count, W/L/D, score percentage, Elo ± margin, LOS, LLR, and whether H0 or H1 was accepted.
+   - Greps `fastchess.log` for the SPRT conclusion.
 
-5. **Agent updates the PR body** with the SPRT result and, if negative, documents it on the linked issue. Do not merge a PR with a negative SPRT result.
+5. **Agent updates the PR body** with the SPRT result and, if negative, documents it on the linked issue.
+
+#### SPRT modes
+
+Two built-in modes are available, selectable via workflow dispatch or PR label:
+
+| Mode | SPRT args | PR label | Use case |
+|------|-----------|----------|----------|
+| prove-gain | `elo0=0 elo1=10 alpha=0.10 beta=0.10` | `sprt-prove-gain` | Prove a positive Elo gain |
+| non-regression | `elo0=-5 elo1=0 alpha=0.05 beta=0.05` | `sprt-non-regression` | Reject unacceptable regression |
+
+For PR-triggered CI runs, mode is resolved by label:
+- `sprt-non-regression` → non-regression mode.
+- `sprt-prove-gain` → prove-gain mode.
+- no mode label → prove-gain (default).
+- `sprt-required` triggers the run but does not select a mode.
+
+For workflow dispatch, mode is selected directly from the `test_mode` input.
+A `custom` mode is also available with manually specified SPRT arguments.
+
+#### Interpreting results
+
+The run summary includes an interpretation section:
+
+- **pass** — H1 accepted (improvement detected).
+- **fail** — H0 accepted (no improvement / regression detected).
+- **inconclusive** — SPRT did not reach a terminal boundary (cancelled, timeout, or still running).
+
+Do not merge a PR with an inconclusive or failed SPRT result.
 
 ## Lint
 

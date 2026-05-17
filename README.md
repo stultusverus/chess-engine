@@ -172,19 +172,27 @@ multi-parameter Texel or SPSA tuning with separate review and SPRT.
 
 ## SPRT
 
-SPRT (Sequential Probability Ratio Testing) regression tests compare the current build against a frozen baseline to detect strength regressions:
+SPRT (Sequential Probability Ratio Testing) tests compare the current build against a frozen baseline. Two modes are supported:
+
+- **prove-gain** (`elo0=0 elo1=10 alpha=0.10 beta=0.10`): prove a positive Elo gain.
+- **non-regression** (`elo0=-5 elo1=0 alpha=0.05 beta=0.05`): reject unacceptable regression, useful for refactors, performance work, and correctness fixes that should not hurt strength.
+
+The CI workflow (`.github/workflows/sprt.yml`) can be triggered manually via workflow dispatch with mode selection, or automatically on PRs labelled `sprt-required`. PR labels `sprt-prove-gain` or `sprt-non-regression` select the mode; the default is `prove-gain`.
 
 ```bash
-# Compare two versioned engine binaries under scripts/vers/
+# Compare two versioned engine binaries
 ./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
 
 # Custom parameters
 TC=5+0.05 ROUNDS=20000 CONCURRENCY=4 ./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
+
+# Non-regression mode
+SPRT_MODE=non-regression ./scripts/run-fastchess-sprt.sh OLD_VERSION NEW_VERSION
 ```
 
-Results are written under `scripts/runs/<timestamp>-OLD_VERSION-vs-NEW_VERSION/`.
+Results are written under `runs/<timestamp>-OLD_VERSION-vs-NEW_VERSION/`.
 
-Environment variables: `TC`, `ROUNDS`, `GAMES`, `SPRT`, `CONCURRENCY`, `STARTUP_MS`, `UCINEWGAME_MS`.
+Environment variables: `TC`, `ROUNDS`, `GAMES`, `SPRT`, `SPRT_MODE`, `DRAW`, `RESIGN`, `CONCURRENCY`, `STARTUP_MS`, `UCINEWGAME_MS`, `PING_MS`, `HASH_MB`.
 
 ## License
 

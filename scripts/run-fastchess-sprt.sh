@@ -12,6 +12,7 @@ tc="${TC:-10+0.1}"
 rounds="${ROUNDS:-100000}"
 games="${GAMES:-2}"
 sprt="${SPRT:-elo0=0 elo1=10 alpha=0.10 beta=0.10}"
+sprt_mode="${SPRT_MODE:-prove-gain}"
 draw="${DRAW:-movenumber=34 movecount=8 score=20}"
 resign="${RESIGN:-movecount=3 score=600}"
 startup_ms="${STARTUP_MS:-60000}"
@@ -37,7 +38,7 @@ Examples:
 
 Environment overrides:
   BOOKS_DIR, VERS_DIR, RUNS_DIR, OPENINGS
-  TC, ROUNDS, GAMES, SPRT, DRAW, RESIGN
+  TC, ROUNDS, GAMES, SPRT, SPRT_MODE, DRAW, RESIGN
   STARTUP_MS, UCINEWGAME_MS, PING_MS, HASH_MB, CONCURRENCY, QUIET_CONSOLE
 EOF
 }
@@ -156,6 +157,7 @@ cmd+=("$@")
     printf 'rounds=%s\n' "${rounds}"
     printf 'games=%s\n' "${games}"
     printf 'sprt=%s\n' "${sprt}"
+    printf 'sprt_mode=%s\n' "${sprt_mode}"
     printf 'draw=%s\n' "${draw}"
     printf 'resign=%s\n' "${resign}"
     printf 'concurrency=%s\n' "${concurrency}"
