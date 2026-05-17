@@ -1,0 +1,20 @@
+{
+  "positions": [
+    {"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "bestmove": "g1f3", "score": 15, "depth": 8, "nodes": 5119},
+    {"fen": "r1bqkbnr/pp1ppppp/2n5/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3", "bestmove": "b1c3", "score": 119, "depth": 8, "nodes": 18580},
+    {"fen": "rnbqkbnr/ppp2ppp/4p3/3pP3/3P4/8/PPP2PPP/RNBQKBNR w KQkq - 0 3", "bestmove": "c1e3", "score": 121, "depth": 8, "nodes": 28785},
+    {"fen": "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 3", "bestmove": "b1c3", "score": 61, "depth": 8, "nodes": 22333},
+    {"fen": "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq d6 0 3", "bestmove": "c4d5", "score": 27, "depth": 8, "nodes": 39876},
+    {"fen": "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", "bestmove": "e2a6", "score": -18, "depth": 8, "nodes": 63113},
+    {"fen": "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1", "bestmove": "b1c3", "score": 61, "depth": 8, "nodes": 22333},
+    {"fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", "bestmove": "g8f6", "score": 7, "depth": 8, "nodes": 13528},
+    {"fen": "4k3/ppp5/8/8/8/8/PPP5/4K3 w - - 0 1", "bestmove": "e1f2", "score": -3, "depth": 8, "nodes": 7327},
+    {"fen": "4k3/pppppppp/8/8/8/8/PPPPPPPP/4K2R w K - 0 1", "bestmove": "e1g1", "score": 552, "depth": 8, "nodes": 8322},
+    {"fen": "6k1/8/4b3/8/8/4N3/8/6K1 w - - 0 1", "bestmove": "g1f2", "score": -11, "depth": 8, "nodes": 9632},
+    {"fen": "r3k2r/pppq1ppp/2npbn2/4p3/2B1P3/2NPBN2/PPPQ1PPP/R3K2R w KQkq - 4 8", "bestmove": "c3d5", "score": 440, "depth": 8, "nodes": 21468},
+    {"fen": "rnbq1rk1/ppp1ppbp/3p1np1/8/2PPP3/2N2N2/PP3PPP/R1BQKB1R w KQ - 4 7", "bestmove": "c1g5", "score": -93, "depth": 8, "nodes": 73309},
+    {"fen": "r3kb1r/pp1n1ppp/2p1pn2/q2p4/2PP4/2N1PN2/PPQ2PPP/R1B1K2R b KQkq - 2 6", "bestmove": "d5c4", "score": 157, "depth": 8, "nodes": 22975},
+    {"fen": "8/5p2/4k3/8/8/4K3/5P2/8 w - - 0 1", "bestmove": "e3e4", "score": 2, "depth": 8, "nodes": 5789}
+  ],
+  "total": {"nodes": 362489, "signature": "cfaa8fb251078151"}
+}
