@@ -93,13 +93,12 @@ double computeLoss(const TuningDataset& dataset, const EvalParams& params, doubl
         return 0.0;
 
     Eval eval;
-    eval.params() = params;
 
     double totalSqError = 0.0;
     for (const auto& entry : dataset.entries) {
         Board board;
         board.setFen(entry.fen);
-        int score = eval.evaluate(board);
+        int score = eval.evaluate(board, params);
         double p = sigmoid(k * score / 100.0);
         double err = entry.target - p;
         totalSqError += err * err;

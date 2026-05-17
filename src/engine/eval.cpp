@@ -40,12 +40,61 @@ int Eval::material(const Board& board) const {
     return board.materialScore();
 }
 
+int Eval::material(const Board& board, const EvalParams& params) const {
+    int score = 0;
+    for (int pt = PAWN; pt <= QUEEN; pt++) {
+        PieceType ptype = PieceType(pt);
+        int val = params.pieceValue(ptype);
+        score += popcount(board.pieces(WHITE, ptype)) * val;
+        score -= popcount(board.pieces(BLACK, ptype)) * val;
+    }
+    return score;
+}
+
 int Eval::pieceSquare(const Board& board, int phase) const {
     return tapered(board.pstMgScore(), board.pstEgScore(), phase);
 }
 
+int Eval::pieceSquare(const Board& board, const EvalParams& params, int phase) const {
+    int mg = 0, eg = 0;
+    for (int pt = PAWN; pt <= KING; pt++) {
+        PieceType ptype = PieceType(pt);
+        const int* mgTable = params.mgTable(ptype);
+        const int* egTable = params.egTable(ptype);
+        Bitboard wPieces = board.pieces(WHITE, ptype);
+        while (wPieces) {
+            Square s = popLsb(wPieces);
+            mg += mgTable[s];
+            eg += egTable[s];
+        }
+        Bitboard bPieces = board.pieces(BLACK, ptype);
+        while (bPieces) {
+            Square s = popLsb(bPieces);
+            mg -= mgTable[s ^ 56];
+            eg -= egTable[s ^ 56];
+        }
+    }
+    int totalPhase = params.totalPhase;
+    return (mg * phase + eg * (totalPhase - phase)) / totalPhase;
+}
+
 int Eval::tapered(int mgScore, int egScore, int phase) const {
     return (mgScore * phase + egScore * (params_.totalPhase - phase)) / params_.totalPhase;
+}
+
+int Eval::gamePhase(const Board& board) const {
+    return board.gamePhaseScore();
+}
+
+int Eval::gamePhase(const Board& board, const EvalParams& params) const {
+    int phase = 0;
+    for (int pt = KNIGHT; pt <= QUEEN; pt++) {
+        PieceType ptype = PieceType(pt);
+        int inc = params.phaseInc[pt];
+        phase += popcount(board.pieces(WHITE, ptype)) * inc;
+        phase += popcount(board.pieces(BLACK, ptype)) * inc;
+    }
+    return std::min(phase, params.totalPhase);
 }
 
 int Eval::cachedPawnStructure(const Board& board) const {
@@ -398,10 +447,6 @@ int Eval::tempo(const Board& board) const {
     return board.sideToMove() == WHITE ? params_.tempoBonus : -params_.tempoBonus;
 }
 
-int Eval::gamePhase(const Board& board) const {
-    return board.gamePhaseScore();
-}
-
 int Eval::evaluate(const Board& board) const {
     size_t idx = board.hash() & (EVAL_CACHE_SIZE - 1);
     EvalCacheEntry& entry = evalCache_[idx];
@@ -419,6 +464,20 @@ int Eval::evaluate(const Board& board) const {
     entry.pawnHash = board.pawnHash();
     entry.score = score;
     entry.valid = true;
+    return score;
+}
+
+int Eval::evaluate(const Board& board, const EvalParams& params) {
+    EvalParams saved = params_;
+    params_ = params;
+
+    int phase = gamePhase(board, params);
+    int score = material(board, params) + pieceSquare(board, params, phase) +
+                pawnStructure(board) + mobility(board, phase) +
+                bishopPair(board, phase) + rookOnFile(board, phase) +
+                kingSafety(board, phase) + tempo(board);
+
+    params_ = saved;
     return score;
 }
 
