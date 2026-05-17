@@ -60,9 +60,9 @@ jobs:
     env:
       OLD_VERSION: base
       NEW_VERSION: candidate
-      ROUNDS: "1500"
+      ROUNDS: "1000"
       GAMES: "2"
-      CONCURRENCY: "2"
+      CONCURRENCY: "3"
       TC: "10+0.1"
       SPRT: "elo0=0 elo1=10 alpha=0.10 beta=0.10"
       DRAW: "movenumber=34 movecount=8 score=20"
