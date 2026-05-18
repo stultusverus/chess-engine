@@ -524,6 +524,8 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                     reduction--;
                 else if (moveOrderingScore < -HISTORY_MAX / 4)
                     reduction++;
+                if (!pvNode && movesMade == 3)
+                    reduction--;
                 reduction = std::clamp(reduction, 0, depth - 2);
             }
             score = -alphaBeta(board, depth - 1 - reduction, -alpha - 1, -alpha, ply + 1);
