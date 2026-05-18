@@ -40,6 +40,30 @@ static int lmpThreshold(int depth) {
     return 3 + depth * depth;
 }
 
+static int lmrBaseReduction(int depth, int movesMade) {
+    static constexpr int REDUCTION_TABLE[3][3] = {
+        {1, 1, 2},
+        {1, 2, 3},
+        {2, 3, 4},
+    };
+
+    int depthBucket = 0;
+    if (depth >= 8) {
+        depthBucket = 2;
+    } else if (depth >= 5) {
+        depthBucket = 1;
+    }
+
+    int moveBucket = 0;
+    if (movesMade >= 12) {
+        moveBucket = 2;
+    } else if (movesMade >= 8) {
+        moveBucket = 1;
+    }
+
+    return REDUCTION_TABLE[depthBucket][moveBucket];
+}
+
 } // namespace
 
 Search::Search() {
@@ -516,9 +540,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
             int reduction = 0;
             if (depth >= 3 && isQuietHistoryMove(m) && !inCheck && !givesCheck &&
                 movesMade >= (pvNode ? 4 : 3)) {
-                reduction = 1;
-                if (depth >= 6) reduction++;
-                if (movesMade >= 8) reduction++;
+                reduction = lmrBaseReduction(depth, movesMade);
                 if (!pvNode) reduction++;
                 if (moveOrderingScore >= KILLER_SCORE || moveOrderingScore > HISTORY_MAX / 2)
                     reduction--;
