@@ -518,7 +518,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                 movesMade >= (pvNode ? 4 : 3)) {
                 reduction = 1;
                 if (depth >= 6) reduction++;
-                if (movesMade >= 8) reduction++;
+                if (movesMade >= 10) reduction++;
                 if (!pvNode) reduction++;
                 if (moveOrderingScore >= KILLER_SCORE || moveOrderingScore > HISTORY_MAX / 2)
                     reduction--;
