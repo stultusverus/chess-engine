@@ -515,7 +515,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
             // Late-move reductions (LMR): reduce moves beyond the first few
             int reduction = 0;
             if (depth >= 3 && isQuietHistoryMove(m) && !inCheck && !givesCheck &&
-                movesMade >= 4) {
+                movesMade >= (pvNode ? 4 : 3)) {
                 reduction = 1;
                 if (depth >= 6) reduction++;
                 if (movesMade >= 8) reduction++;
