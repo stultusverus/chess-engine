@@ -250,7 +250,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
     if (ttEntry) {
         ttMove = tt_.unpackMove(ttEntry->move);
         ttScore = ttEntry->scoreValue();
-        if (ttEntry->hasStaticEval())
+        if (ttEntry->hasStaticEval() && ttEntry->evaluatorType() == evaluatorType_)
             staticEval = ttEntry->staticEvalValue();
 
         // Mate score adjustment
@@ -586,7 +586,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         else if (ttStoreScore < -MATE + MAX_PLY) ttStoreScore -= ply;
 
         tt_.store(hash, ttStoreScore, static_cast<int8_t>(depth), b, bestMoveInNode,
-                  staticEval);
+                  staticEval, evaluatorType_);
     }
 
     return bestScore;
