@@ -33,9 +33,10 @@ bool hasNonPawnMaterial(const Board& board, Color side) {
 }
 
 // Late move pruning constants
-static constexpr int LMP_MAX_DEPTH = 3;
+static constexpr int LMP_MAX_DEPTH = 4;
 
 static int lmpThreshold(int depth) {
+    if (depth == 4) return 20;
     // depth 1: 4, depth 2: 7, depth 3: 12
     return 3 + depth * depth;
 }
