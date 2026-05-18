@@ -192,8 +192,8 @@ SearchResult Search::search(const Board& board, int maxDepth) {
         if (adaptiveTimeManagement_ && hardTimeMs_ > 0 && depth >= 4) {
             // Derive adjustment from the original soft time to avoid compounding
             int adjustedSoft = originalSoftTimeMs_;
-            // Stable position: reduce time after 2+ stable iterations
-            if (stableIterations_ >= 2) {
+            // Stable position: reduce time after 3+ stable iterations
+            if (stableIterations_ >= 3) {
                 adjustedSoft = originalSoftTimeMs_ * 3 / 4;
             }
             // Score dropping: allocate more time
