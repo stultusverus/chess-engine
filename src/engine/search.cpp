@@ -720,7 +720,7 @@ int Search::quietMoveScore(const Board& board, Move m, int ply) const {
             Piece previousPiece = continuationPieceByPly_[ply];
             Square previousTo = continuationToByPly_[ply];
             if (previousPiece != NO_PIECE && previousTo != SQ_NONE)
-                score += continuationHistory_[previousPiece][previousTo][movedPiece][m.to] / 2;
+                score += continuationHistory_[previousPiece][previousTo][movedPiece][m.to];
         }
     }
 
