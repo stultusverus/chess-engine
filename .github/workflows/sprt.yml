@@ -2,7 +2,7 @@ name: SPRT
 
 on:
   pull_request:
-    types: [synchronize]
+    types: [synchronize,labeled]
   workflow_dispatch:
     inputs:
       base_ref:
@@ -40,7 +40,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   sprt:
