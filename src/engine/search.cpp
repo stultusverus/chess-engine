@@ -522,7 +522,7 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
                 if (!pvNode) reduction++;
                 if (moveOrderingScore >= KILLER_SCORE || moveOrderingScore > HISTORY_MAX / 2)
                     reduction--;
-                else if (moveOrderingScore < -HISTORY_MAX / 4)
+                else if (moveOrderingScore < -HISTORY_MAX / 2)
                     reduction++;
                 reduction = std::clamp(reduction, 0, depth - 2);
             }
