@@ -54,6 +54,7 @@ public:
     void setInfoCallback(std::function<void(const SearchResult&)> callback);
     void setTTSize(int mb) { tt_.setSize(mb); }
     void clearTT() { tt_.clear(); }
+    void setEvaluatorType(EvaluatorType type) { evaluatorType_ = type; }
     void stop();
     bool isStopped() const { return stop_.load(); }
 
@@ -125,6 +126,7 @@ private:
     MoveGenerator gen_;
     Eval eval_;
     TranspositionTable tt_;
+    EvaluatorType evaluatorType_ = EvaluatorType::CLASSICAL;
 };
 
 } // namespace chess

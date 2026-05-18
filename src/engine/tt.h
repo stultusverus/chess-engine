@@ -9,6 +9,11 @@ namespace chess {
 
 constexpr int TT_STATIC_EVAL_NONE = 32767;
 
+enum class EvaluatorType : uint8_t {
+    CLASSICAL = 0,
+    NNUE = 1,
+};
+
 enum class Bound : uint8_t {
     NONE = 0,
     EXACT = 1,
@@ -22,14 +27,15 @@ struct TTEntry {
     int16_t score;
     int16_t staticEval;
     int8_t depth;
-    uint8_t metadata; // low 2 bits: Bound, high 6 bits: generation
+    uint8_t metadata; // bits 0-1: Bound, 2-6: generation, 7: EvaluatorType
     uint16_t move; // packed: from | (to << 6) | (promotion << 12)
 
     int scoreValue() const;
     bool hasStaticEval() const { return staticEval != TT_STATIC_EVAL_NONE; }
     int staticEvalValue() const { return staticEval; }
     Bound bound() const { return static_cast<Bound>(metadata & 0x03); }
-    uint8_t generation() const { return metadata >> 2; }
+    uint8_t generation() const { return (metadata >> 2) & 0x1F; }
+    EvaluatorType evaluatorType() const { return static_cast<EvaluatorType>(metadata >> 7); }
 };
 #pragma pack(pop)
 
@@ -57,7 +63,8 @@ public:
 
     // Store entry using depth/generation-preferred replacement.
     void store(uint64_t hash, int score, int8_t depth, Bound bound, Move move,
-               int staticEval = TT_STATIC_EVAL_NONE);
+               int staticEval = TT_STATIC_EVAL_NONE,
+               EvaluatorType evalType = EvaluatorType::CLASSICAL);
 
     // Pack/Unpack move
     static uint16_t packMove(Move m);
