@@ -292,8 +292,10 @@ int Search::alphaBeta(Board& board, int depth, int alpha, int beta, int ply) {
         return staticEval;
     };
 
-    // Null move pruning (skip when searching mate lines)
-    if (depth >= 4 && !inCheck && beta < MATE - MAX_PLY) {
+    // Null move pruning (skip when searching mate lines, and when static eval
+    // is far below beta making a fail-high unlikely)
+    if (depth >= 4 && !inCheck && beta < MATE - MAX_PLY &&
+        currentStaticEval() >= beta - 100) {
         Bitboard stmAll = board.pieces(board.sideToMove());
         Bitboard stmPawnKing = board.pieces(board.sideToMove(), KING) | board.pieces(board.sideToMove(), PAWN);
         if (stmAll != stmPawnKing) {
